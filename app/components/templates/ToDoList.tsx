@@ -1,45 +1,189 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BottomNavBar from '../molecules/BottomNavBar';
-import { useAppDispatch, useAppSelector } from '@/app/lib/store/hooks';
-import { addPanorama, updatePanoramaStatus, type Panorama, type PanoramaStatus } from '@/app/lib/store/slices/panoramaSlice';
+import { FaDiceFive } from "react-icons/fa";
+
+type TodoStatus = 'todo' | 'doing' | 'done';
+
+interface TodoItem {
+  id: string;
+  title: string;
+  description: string | null;
+  target_date: string | null;
+  target_time: string | null;
+  status: TodoStatus;
+  completed: boolean;
+  created_at: string;
+}
 
 export default function ToDoListTemplate() {
-  const dispatch = useAppDispatch();
-  const panoramas = useAppSelector((state) => state.panorama.panoramas);
-
+  const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showAddPopup, setShowAddPopup] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<PanoramaStatus>('todo');
-  const [newPanorama, setNewPanorama] = useState({
+  const [showStatusPopup, setShowStatusPopup] = useState(false);
+  const [showRandomPopup, setShowRandomPopup] = useState(false);
+  const [showEmptyAlert, setShowEmptyAlert] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [todoToDelete, setTodoToDelete] = useState<string | null>(null);
+  const [randomTodo, setRandomTodo] = useState<TodoItem | null>(null);
+  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<TodoStatus>('todo');
+  const [isLoading, setIsLoading] = useState(false);
+  const [newTodo, setNewTodo] = useState({
     name: '',
     description: '',
     date: '',
   });
 
-  const handleAddPanorama = () => {
-    if (newPanorama.name.trim() && newPanorama.description.trim()) {
-      const panorama: Panorama = {
-        id: Date.now().toString() + Math.random(),
-        name: newPanorama.name.trim(),
-        description: newPanorama.description.trim(),
-        date: newPanorama.date || undefined,
-        status: 'todo',
-        createdAt: new Date().toISOString(),
-      };
-      dispatch(addPanorama(panorama));
-      setNewPanorama({ name: '', description: '', date: '' });
-      setShowAddPopup(false);
+  useEffect(() => {
+    loadTodos();
+  }, []);
+
+  const loadTodos = async () => {
+    try {
+      const res = await fetch('/api/panoramas', {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTodos(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading todos:', error);
     }
   };
 
-  const handleStatusChange = (id: string, status: PanoramaStatus) => {
-    dispatch(updatePanoramaStatus({ id, status }));
+  const handleAddTodo = async () => {
+    if (newTodo.name.trim() && newTodo.description.trim() && !isLoading) {
+      setIsLoading(true);
+      try {
+        const res = await fetch('/api/panoramas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            title: newTodo.name.trim(),
+            description: newTodo.description.trim(),
+            target_date: newTodo.date || null,
+            target_time: null,
+          }),
+        });
+
+        if (res.ok) {
+          await loadTodos();
+          setNewTodo({ name: '', description: '', date: '' });
+          setShowAddPopup(false);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
-  const filteredPanoramas = panoramas.filter(p => p.status === selectedFilter);
+  const handleStatusChange = async (id: string, status: TodoStatus) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/panoramas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          id,
+          status,
+          completed: status === 'done',
+        }),
+      });
 
-  const filters: { status: PanoramaStatus; label: string }[] = [
+      if (res.ok) {
+        await loadTodos();
+        setShowStatusPopup(false);
+        setSelectedTodoId(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenStatusPopup = (id: string) => {
+    setSelectedTodoId(id);
+    setShowStatusPopup(true);
+  };
+
+  const handleRandomTodo = () => {
+    const todoItems = todos.filter(t => t.status === 'todo');
+    if (todoItems.length === 0) {
+      setShowEmptyAlert(true);
+      return;
+    }
+    const randomIndex = Math.floor(Math.random() * todoItems.length);
+    setRandomTodo(todoItems[randomIndex]);
+    setShowRandomPopup(true);
+  };
+
+  const handleAcceptRandom = async () => {
+    if (randomTodo && !isLoading) {
+      setIsLoading(true);
+      try {
+        const res = await fetch('/api/panoramas', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            id: randomTodo.id,
+            status: 'doing',
+            completed: false,
+          }),
+        });
+
+        if (res.ok) {
+          await loadTodos();
+          setShowRandomPopup(false);
+          setRandomTodo(null);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleRejectRandom = () => {
+    setShowRandomPopup(false);
+    setRandomTodo(null);
+  };
+
+  const handleDeleteTodo = async (id: string) => {
+    setTodoToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!todoToDelete) return;
+    
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/panoramas?id=${todoToDelete}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        await loadTodos();
+        setShowDeleteConfirm(false);
+        setTodoToDelete(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setTodoToDelete(null);
+  };
+
+  const filteredTodos = todos.filter(t => t.status === selectedFilter);
+
+  const filters: { status: TodoStatus; label: string }[] = [
     { status: 'todo', label: 'To do' },
     { status: 'doing', label: 'Haciendo' },
     { status: 'done', label: 'Hecho' },
@@ -54,12 +198,21 @@ export default function ToDoListTemplate() {
           <h1 className="text-3xl font-bold text-gray-900">
             Panoramas
           </h1>
-          <button
-            onClick={() => setShowAddPopup(true)}
-            className="w-12 h-12 bg-teal-500 hover:bg-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl font-light transition-all shadow-lg"
-          >
-            +
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleRandomTodo}
+              className="w-12 h-12 bg-teal-500 hover:bg-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl transition-all shadow-lg"
+              title="Panorama aleatorio"
+            >
+              <FaDiceFive />
+            </button>
+            <button
+              onClick={() => setShowAddPopup(true)}
+              className="w-12 h-12 bg-teal-500 hover:bg-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl font-light transition-all shadow-lg"
+            >
+              +
+            </button>
+          </div>
         </div>
 
         {/* Filter Tabs */}
@@ -81,69 +234,154 @@ export default function ToDoListTemplate() {
 
         {/* Panoramas List */}
         <div className="space-y-4">
-          {filteredPanoramas.length === 0 ? (
+          {filteredTodos.length === 0 ? (
             <div className="bg-white rounded-3xl shadow-sm p-8 text-center">
               <p className="text-gray-400 text-sm">
                 No hay panoramas en esta categoría
               </p>
             </div>
           ) : (
-            filteredPanoramas.map(panorama => (
+            filteredTodos.map(todo => (
               <div
-                key={panorama.id}
-                className="bg-white rounded-3xl shadow-sm p-6 flex gap-4"
+                key={todo.id}
+                className="bg-white rounded-3xl shadow-sm p-6 flex gap-4 items-start"
               >
-                <div className="w-1 bg-teal-500 rounded-full flex-shrink-0" />
+                <div className="w-1 bg-teal-500 rounded-full flex-shrink-0 self-stretch" />
                 <div className="flex-1">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">
-                    {panorama.name}
+                    {todo.title}
                   </h3>
                   <p className="text-sm text-gray-600 mb-3">
-                    {panorama.description}
+                    {todo.description}
                   </p>
-                  {panorama.date && (
-                    <p className="text-xs text-gray-500 mb-3">
-                      📅 {new Date(panorama.date).toLocaleDateString('es-ES', {
+                  {todo.target_date && (
+                    <p className="text-xs text-gray-500">
+                      📅 {new Date(todo.target_date + 'T00:00:00').toLocaleDateString('es-ES', {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric'
                       })}
                     </p>
                   )}
+                </div>
+                
+                <div className="flex gap-2 items-start">
+                  {(todo.status === 'todo' || todo.status === 'doing') && (
+                    <button
+                      onClick={() => handleDeleteTodo(todo.id)}
+                      disabled={isLoading}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                        isLoading 
+                          ? 'cursor-not-allowed opacity-50 bg-gray-100'
+                          : 'hover:bg-red-50 text-gray-400 hover:text-red-500'
+                      }`}
+                      title="Eliminar panorama"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                   
-                  {/* Status Buttons */}
-                  <div className="flex gap-2">
-                    {panorama.status !== 'todo' && (
-                      <button
-                        onClick={() => handleStatusChange(panorama.id, 'todo')}
-                        className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg text-xs font-medium text-gray-700 transition-all"
-                      >
-                        To do
-                      </button>
+                  <button
+                    onClick={() => handleOpenStatusPopup(todo.id)}
+                    disabled={isLoading}
+                    className={`w-8 h-8 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      todo.status === 'doing' 
+                        ? 'bg-yellow-400 border-yellow-400'
+                        : 'border-gray-300'
+                    } ${
+                      isLoading 
+                        ? 'cursor-not-allowed opacity-50'
+                        : 'hover:border-teal-500 hover:bg-teal-50'
+                    }`}
+                  >
+                    {todo.completed && (
+                      <svg className="w-5 h-5 text-teal-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
                     )}
-                    {panorama.status !== 'doing' && (
-                      <button
-                        onClick={() => handleStatusChange(panorama.id, 'doing')}
-                        className="px-3 py-1 bg-blue-100 hover:bg-blue-200 rounded-lg text-xs font-medium text-blue-700 transition-all"
-                      >
-                        Haciendo
-                      </button>
-                    )}
-                    {panorama.status !== 'done' && (
-                      <button
-                        onClick={() => handleStatusChange(panorama.id, 'done')}
-                        className="px-3 py-1 bg-green-100 hover:bg-green-200 rounded-lg text-xs font-medium text-green-700 transition-all"
-                      >
-                        Hecho
-                      </button>
-                    )}
-                  </div>
+                  </button>
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Status Selection Popup */}
+      {showStatusPopup && selectedTodoId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+              ¿A qué sección mover?
+            </h3>
+            
+            {isLoading && (
+              <div className="mb-4 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
+                <p className="text-sm text-gray-600 mt-2">Actualizando...</p>
+              </div>
+            )}
+            
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => handleStatusChange(selectedTodoId, 'todo')}
+                disabled={isLoading}
+                className={`w-full py-4 px-6 rounded-xl text-left font-medium transition-all flex items-center gap-3 ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                }`}
+              >
+                <div className="w-4 h-4 rounded-full bg-gray-400" />
+                To do
+              </button>
+              
+              <button
+                onClick={() => handleStatusChange(selectedTodoId, 'doing')}
+                disabled={isLoading}
+                className={`w-full py-4 px-6 rounded-xl text-left font-medium transition-all flex items-center gap-3 ${
+                  isLoading
+                    ? 'bg-[#FFF3C5] text-blue-300 cursor-not-allowed'
+                    : 'bg-[#FFF3C5] hover:bg-[#FFF4B3] text-[#CCA30D]'
+                }`}
+              >
+                <div className="w-4 h-4 rounded-full bg-[#FDC700]" />
+                Haciendo
+              </button>
+              
+              <button
+                onClick={() => handleStatusChange(selectedTodoId, 'done')}
+                disabled={isLoading}
+                className={`w-full py-4 px-6 rounded-xl text-left font-medium transition-all flex items-center gap-3 ${
+                  isLoading
+                    ? 'bg-green-50 text-green-300 cursor-not-allowed'
+                    : 'bg-green-50 hover:bg-green-100 text-green-700'
+                }`}
+              >
+                <div className="w-4 h-4 rounded-full bg-green-500" />
+                Hecho
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowStatusPopup(false);
+                setSelectedTodoId(null);
+              }}
+              disabled={isLoading}
+              className={`w-full py-3 rounded-xl font-medium transition-all ${
+                isLoading
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+              }`}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add Panorama Popup */}
       {showAddPopup && (
@@ -160,8 +398,8 @@ export default function ToDoListTemplate() {
                 </label>
                 <input
                   type="text"
-                  value={newPanorama.name}
-                  onChange={(e) => setNewPanorama({ ...newPanorama, name: e.target.value })}
+                  value={newTodo.name}
+                  onChange={(e) => setNewTodo({ ...newTodo, name: e.target.value })}
                   placeholder="Nombre del panorama"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:opacity-40 text-gray-900"
                 />
@@ -169,11 +407,11 @@ export default function ToDoListTemplate() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Descripción
+                  Descripción *
                 </label>
                 <textarea
-                  value={newPanorama.description}
-                  onChange={(e) => setNewPanorama({ ...newPanorama, description: e.target.value })}
+                  value={newTodo.description}
+                  onChange={(e) => setNewTodo({ ...newTodo, description: e.target.value })}
                   placeholder="Breve descripción de la tarea"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder:opacity-40 text-gray-900"
                   rows={3}
@@ -186,8 +424,8 @@ export default function ToDoListTemplate() {
                 </label>
                 <input
                   type="date"
-                  value={newPanorama.date}
-                  onChange={(e) => setNewPanorama({ ...newPanorama, date: e.target.value })}
+                  value={newTodo.date}
+                  onChange={(e) => setNewTodo({ ...newTodo, date: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900"
                 />
               </div>
@@ -197,22 +435,173 @@ export default function ToDoListTemplate() {
               <button
                 onClick={() => {
                   setShowAddPopup(false);
-                  setNewPanorama({ name: '', description: '', date: '' });
+                  setNewTodo({ name: '', description: '', date: '' });
                 }}
-                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all"
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
               >
                 Cancelar
               </button>
               <button
-                onClick={handleAddPanorama}
-                disabled={!newPanorama.name.trim() || !newPanorama.description.trim()}
+                onClick={handleAddTodo}
+                disabled={!newTodo.name.trim() || !newTodo.description.trim() || isLoading}
                 className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
-                  newPanorama.name.trim() && newPanorama.description.trim()
+                  newTodo.name.trim() && newTodo.description.trim() && !isLoading
                     ? 'bg-teal-500 hover:bg-teal-600'
                     : 'bg-teal-300 cursor-not-allowed'
                 }`}
               >
-                Agregar
+                {isLoading ? 'Guardando...' : 'Agregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Popup */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Eliminar panorama
+              </h3>
+              <p className="text-sm text-gray-600">
+                ¿Estás seguro de que quieres eliminar este panorama? Esta acción no se puede deshacer.
+              </p>
+            </div>
+
+            {isLoading && (
+              <div className="mb-4 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+                <p className="text-sm text-gray-600 mt-2">Eliminando...</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
+                  isLoading
+                    ? 'bg-red-300 cursor-not-allowed'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
+              >
+                {isLoading ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Empty Alert Popup */}
+      {showEmptyAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                No hay panoramas
+              </h3>
+              <p className="text-sm text-gray-600">
+                No hay panoramas en la sección "To do" para seleccionar aleatoriamente.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowEmptyAlert(false)}
+              className="w-full py-3 bg-teal-500 hover:bg-teal-600 rounded-xl font-medium text-white transition-all"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Random Todo Popup */}
+      {showRandomPopup && randomTodo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+              🎲 Panorama Aleatorio
+            </h3>
+            
+            {isLoading && (
+              <div className="mb-4 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
+                <p className="text-sm text-gray-600 mt-2">Moviendo a Haciendo...</p>
+              </div>
+            )}
+            
+            <div className="bg-gray-50 rounded-2xl p-4 mb-6">
+              <h4 className="text-lg font-bold text-gray-900 mb-2">
+                {randomTodo.title}
+              </h4>
+              <p className="text-sm text-gray-600 mb-3">
+                {randomTodo.description}
+              </p>
+              {randomTodo.target_date && (
+                <p className="text-xs text-gray-500">
+                  📅 {new Date(randomTodo.target_date + 'T00:00:00').toLocaleDateString('es-ES', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </p>
+              )}
+            </div>
+
+            <p className="text-sm text-gray-600 text-center mb-6">
+              ¿Quieres realizar este panorama en pareja?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleRejectRandom}
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                Rechazar
+              </button>
+              <button
+                onClick={handleAcceptRandom}
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
+                  isLoading
+                    ? 'bg-teal-300 cursor-not-allowed'
+                    : 'bg-teal-500 hover:bg-teal-600'
+                }`}
+              >
+                {isLoading ? 'Aceptando...' : 'Aceptar'}
               </button>
             </div>
           </div>
