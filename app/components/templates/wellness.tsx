@@ -65,6 +65,14 @@ export default function WellnessTemplate() {
       const cycleData = await cycleRes.json();
       setCyclePhases(cycleData.data || []);
     }
+
+    const intimacyRes = await fetch('/api/wellness/intimacy', {
+      credentials: 'include',
+    });
+    if (intimacyRes.ok) {
+      const intimacyData = await intimacyRes.json();
+      setIntimacyEvents(intimacyData.data || []);
+    }
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -105,6 +113,21 @@ export default function WellnessTemplate() {
         setTimeout(() => setShowError(false), 3000);
         setShowPopup(false);
         return;
+      }
+
+      if (selectedDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDateNormalized = new Date(selectedDate);
+        selectedDateNormalized.setHours(0, 0, 0, 0);
+
+        if (selectedDateNormalized > today) {
+          setErrorMessage('No puedes agregar un evento en una fecha futura.');
+          setShowError(true);
+          setTimeout(() => setShowError(false), 3000);
+          setShowPopup(false);
+          return;
+        }
       }
 
       if (selectedDate && !isLoading) {
@@ -264,20 +287,32 @@ export default function WellnessTemplate() {
 
   const renderCalendar = () => {
     const days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(<div key={`empty-${i}`} className="h-12" />);
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      const date = new Date(year, month, day);
+      date.setHours(0, 0, 0, 0);
+      
       const isSelected = isDateSelected(day);
       const phaseColor = getDatePhaseColor(day);
+      const isFutureDate = date > today;
+      
       days.push(
         <button
           key={day}
-          onClick={() => toggleDateSelection(day)}
+          onClick={() => !isFutureDate && toggleDateSelection(day)}
+          disabled={isFutureDate}
           className={`h-12 flex items-center justify-center rounded-lg text-base font-medium transition-all ${
-            isSelected
+            isFutureDate
+              ? 'text-gray-400 opacity-60 cursor-not-allowed'
+              : isSelected
               ? 'bg-gray-900 text-white'
               : phaseColor || 'text-gray-800 hover:bg-gray-200'
           }`}
@@ -419,60 +454,91 @@ export default function WellnessTemplate() {
           </div>
 
           <div className="space-y-3">
-            {sortedPhases.length === 0 ? (
+            {sortedPhases.length === 0 && intimacyEvents.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
                 <p className="text-gray-400 text-sm">
                   No hay registros agregados aún
                 </p>
               </div>
             ) : (
-              sortedPhases.map(phase => (
-                <div
-                  key={phase.id}
-                  className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
-                >
-                  <div className={`w-3 h-3 rounded-full ${getPhaseColor(phase.phase_type)}`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">
-                      {getPhaseLabel(phase.phase_type)}
-                      {!phase.end_date && (
-                        <span className="ml-2 text-xs text-green-600 font-semibold">
-                          En curso
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Inicio: {new Date(phase.start_date).toLocaleDateString('es-ES', { 
-                        day: 'numeric', 
-                        month: 'long', 
-                        year: 'numeric' 
-                      })}
-                    </p>
-                    {phase.end_date && (
+              <>
+                {sortedPhases.map(phase => (
+                  <div
+                    key={phase.id}
+                    className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
+                  >
+                    <div className={`w-3 h-3 rounded-full ${getPhaseColor(phase.phase_type)}`} />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        {getPhaseLabel(phase.phase_type)}
+                        {!phase.end_date && (
+                          <span className="ml-2 text-xs text-green-600 font-semibold">
+                            En curso
+                          </span>
+                        )}
+                      </p>
                       <p className="text-sm text-gray-500">
-                        Fin: {new Date(phase.end_date).toLocaleDateString('es-ES', { 
+                        Inicio: {new Date(phase.start_date).toLocaleDateString('es-ES', { 
                           day: 'numeric', 
                           month: 'long', 
                           year: 'numeric' 
                         })}
                       </p>
+                      {phase.end_date && (
+                        <p className="text-sm text-gray-500">
+                          Fin: {new Date(phase.end_date).toLocaleDateString('es-ES', { 
+                            day: 'numeric', 
+                            month: 'long', 
+                            year: 'numeric' 
+                          })}
+                        </p>
+                      )}
+                    </div>
+                    {!phase.end_date && (
+                      <button
+                        onClick={() => handleEndPhase(phase.id)}
+                        disabled={isLoading}
+                        className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
+                          isLoading 
+                            ? 'bg-pink-300 cursor-not-allowed' 
+                            : 'bg-pink-500 hover:bg-pink-600'
+                        }`}
+                      >
+                        {isLoading ? 'Finalizando...' : 'Finalizar'}
+                      </button>
                     )}
                   </div>
-                  {!phase.end_date && (
-                    <button
-                      onClick={() => handleEndPhase(phase.id)}
-                      disabled={isLoading}
-                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
-                        isLoading 
-                          ? 'bg-pink-300 cursor-not-allowed' 
-                          : 'bg-pink-500 hover:bg-pink-600'
-                      }`}
-                    >
-                      {isLoading ? 'Finalizando...' : 'Finalizar'}
-                    </button>
-                  )}
-                </div>
-              ))
+                ))}
+                
+                {intimacyEvents.map(event => (
+                  <div
+                    key={event.id}
+                    className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
+                  >
+                    <div className="w-3 h-3 rounded-full bg-pink-400" />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        Intimidad
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(event.event_date + 'T00:00:00').toLocaleDateString('es-ES', { 
+                          day: 'numeric', 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {event.used_condom ? '✓ Con condón' : '✗ Sin condón'}
+                      </p>
+                      {event.notes && (
+                        <p className="text-xs text-gray-500 italic mt-1">
+                          {event.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>

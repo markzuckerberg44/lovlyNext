@@ -47,3 +47,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
 }
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    const { data: coupleMember, error: coupleMemberError } = await supabase
+      .from('couple_members')
+      .select('couple_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (coupleMemberError || !coupleMember) {
+      return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
+    }
+
+    const { data, error } = await supabase
+      .from('intimacy_events')
+      .select('*')
+      .eq('couple_id', coupleMember.couple_id)
+      .order('event_date', { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
+  }
+}
