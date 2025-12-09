@@ -1,18 +1,51 @@
 import { NextResponse } from 'next/server';
-import { SupabaseAuthRepository } from '@/app/lib/repositories/supabase-auth.repository';
-import { LoginUseCase } from '@/app/lib/usecases/auth.usecases';
+import { createClient } from '@/app/lib/supabase/server';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, password } = body;
 
-    const authRepository = new SupabaseAuthRepository();
-    const loginUseCase = new LoginUseCase(authRepository);
+    const supabase = await createClient();
 
-    const result = await loginUseCase.execute({ email, password });
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    return NextResponse.json(result, { status: 200 });
+    if (authError || !authData.user) {
+      return NextResponse.json(
+        { error: authError?.message || 'Error al iniciar sesión' },
+        { status: 401 }
+      );
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError) {
+      return NextResponse.json(
+        { error: profileError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      user: {
+        id: authData.user.id,
+        email: authData.user.email!,
+      },
+      profile: {
+        id: profileData.id,
+        display_name: profileData.display_name,
+        gender: profileData.gender,
+        invite_code: profileData.invite_code,
+        created_at: profileData.created_at,
+      },
+    }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Error al iniciar sesión' },

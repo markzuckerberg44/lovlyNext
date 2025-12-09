@@ -1,17 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BottomNavBar from '../molecules/BottomNavBar';
-import { useAppDispatch, useAppSelector } from '@/app/lib/store/hooks';
-import { addHealthEntry, type HealthEntry as ReduxHealthEntry } from '@/app/lib/store/slices/wellnessSlice';
 
 type HealthType = 'ovulacion' | 'periodo' | 'anticonceptivo' | 'intimidad';
 
+interface CyclePhase {
+  id: string;
+  phase_type: 'period' | 'ovulation';
+  start_date: string;
+  end_date: string | null;
+  user_id: string;
+}
+
+interface IntimacyEvent {
+  id: string;
+  event_date: string;
+  used_condom: boolean;
+  notes: string | null;
+}
+
+interface ContraceptiveEvent {
+  id: string;
+  event_date: string;
+  method: string | null;
+}
+
 export default function WellnessTemplate() {
-  const dispatch = useAppDispatch();
-  const healthHistory = useAppSelector((state) => state.wellness.healthHistory);
+  const [cyclePhases, setCyclePhases] = useState<CyclePhase[]>([]);
+  const [intimacyEvents, setIntimacyEvents] = useState<IntimacyEvent[]>([]);
+  const [contraceptiveEvents, setContraceptiveEvents] = useState<ContraceptiveEvent[]>([]);
   
-  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [showIntimacyPopup, setShowIntimacyPopup] = useState(false);
   const [showContraceptivePopup, setShowContraceptivePopup] = useState(false);
@@ -19,7 +39,9 @@ export default function WellnessTemplate() {
   const [intimacyNote, setIntimacyNote] = useState('');
   const [contraceptiveMethod, setContraceptiveMethod] = useState('');
   const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('Por favor selecciona al menos una fecha en el calendario');
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(false);
 
   const healthOptions: { type: HealthType; label: string; color: string }[] = [
     { type: 'ovulacion', label: 'Ovulación', color: 'bg-blue-500' },
@@ -30,6 +52,20 @@ export default function WellnessTemplate() {
 
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  useEffect(() => {
+    loadHealthData();
+  }, []);
+
+  const loadHealthData = async () => {
+    const cycleRes = await fetch('/api/wellness/cycle-phases', {
+      credentials: 'include',
+    });
+    if (cycleRes.ok) {
+      const cycleData = await cycleRes.json();
+      setCyclePhases(cycleData.data || []);
+    }
+  };
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -43,7 +79,8 @@ export default function WellnessTemplate() {
   };
 
   const handleAddDate = () => {
-    if (selectedDates.length === 0) {
+    if (!selectedDate) {
+      setErrorMessage('Por favor selecciona al menos una fecha en el calendario');
       setShowError(true);
       setTimeout(() => setShowError(false), 3000);
     } else {
@@ -51,7 +88,7 @@ export default function WellnessTemplate() {
     }
   };
 
-  const handleSelectHealthType = (type: HealthType) => {
+  const handleSelectHealthType = async (type: HealthType) => {
     if (type === 'intimidad') {
       setShowPopup(false);
       setShowIntimacyPopup(true);
@@ -59,33 +96,79 @@ export default function WellnessTemplate() {
       setShowPopup(false);
       setShowContraceptivePopup(true);
     } else {
-      selectedDates.forEach(date => {
-        const newEntry: ReduxHealthEntry = {
-          id: Date.now().toString() + Math.random(),
-          type,
-          date: date.toISOString(),
-        };
-        dispatch(addHealthEntry(newEntry));
-      });
-      setSelectedDates([]);
+      const activePhase = cyclePhases.find(phase => !phase.end_date);
+
+      if (activePhase) {
+        const activePhaseLabel = activePhase.phase_type === 'period' ? 'periodo' : 'periodo de ovulación';
+        setErrorMessage(`Ya tienes un ${activePhaseLabel} activo. Finalízalo antes de agregar otro.`);
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
+        setShowPopup(false);
+        return;
+      }
+
+      if (selectedDate && !isLoading) {
+        setIsLoading(true);
+        try {
+          await fetch('/api/wellness/cycle-phases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              phase_type: type === 'ovulacion' ? 'ovulation' : 'period',
+              start_date: selectedDate.toISOString().split('T')[0],
+            }),
+          });
+          await loadHealthData();
+        } finally {
+          setIsLoading(false);
+        }
+      }
+      setSelectedDate(null);
       setShowPopup(false);
     }
   };
 
-  const handleSaveContraceptive = () => {
-    if (contraceptiveMethod.trim()) {
-      selectedDates.forEach(date => {
-        const newEntry: ReduxHealthEntry = {
-          id: Date.now().toString() + Math.random(),
-          type: 'anticonceptivo',
-          date: date.toISOString(),
-          contraceptiveMethod: contraceptiveMethod.trim(),
-        };
-        dispatch(addHealthEntry(newEntry));
+  const handleEndPhase = async (phaseId: string) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await fetch('/api/wellness/cycle-phases', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          id: phaseId,
+          end_date: today,
+        }),
       });
-      setSelectedDates([]);
-      setShowContraceptivePopup(false);
-      setContraceptiveMethod('');
+      await loadHealthData();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveContraceptive = async () => {
+    if (contraceptiveMethod.trim() && selectedDate && !isLoading) {
+      setIsLoading(true);
+      try {
+        await fetch('/api/wellness/contraceptive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            event_date: selectedDate.toISOString().split('T')[0],
+            method: contraceptiveMethod.trim(),
+          }),
+        });
+        await loadHealthData();
+        setSelectedDate(null);
+        setShowContraceptivePopup(false);
+        setContraceptiveMethod('');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -95,21 +178,29 @@ export default function WellnessTemplate() {
     setShowPopup(true);
   };
 
-  const handleSaveIntimacy = () => {
-    selectedDates.forEach(date => {
-      const newEntry: ReduxHealthEntry = {
-        id: Date.now().toString() + Math.random(),
-        type: 'intimidad',
-        date: date.toISOString(),
-        usedCondom: usedCondom ?? undefined,
-        note: intimacyNote.trim() || undefined,
-      };
-      dispatch(addHealthEntry(newEntry));
-    });
-    setSelectedDates([]);
-    setShowIntimacyPopup(false);
-    setUsedCondom(null);
-    setIntimacyNote('');
+  const handleSaveIntimacy = async () => {
+    if (selectedDate && !isLoading) {
+      setIsLoading(true);
+      try {
+        await fetch('/api/wellness/intimacy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            event_date: selectedDate.toISOString().split('T')[0],
+            used_condom: usedCondom ?? false,
+            notes: intimacyNote.trim() || null,
+          }),
+        });
+        await loadHealthData();
+        setSelectedDate(null);
+        setShowIntimacyPopup(false);
+        setUsedCondom(null);
+        setIntimacyNote('');
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const handleCancelIntimacy = () => {
@@ -124,21 +215,41 @@ export default function WellnessTemplate() {
     const month = currentMonth.getMonth();
     const date = new Date(year, month, day);
     
-    setSelectedDates(prev => {
-      const exists = prev.some(d => d.getTime() === date.getTime());
-      if (exists) {
-        return prev.filter(d => d.getTime() !== date.getTime());
+    setSelectedDate(prev => {
+      if (prev && prev.getTime() === date.getTime()) {
+        return null;
       } else {
-        return [...prev, date];
+        return date;
       }
     });
   };
 
   const isDateSelected = (day: number) => {
+    if (!selectedDate) return false;
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const date = new Date(year, month, day);
-    return selectedDates.some(d => d.getTime() === date.getTime());
+    return selectedDate.getTime() === date.getTime();
+  };
+
+  const getDatePhaseColor = (day: number) => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const date = new Date(year, month, day);
+    date.setHours(0, 0, 0, 0);
+
+    for (const phase of cyclePhases) {
+      const startDate = new Date(phase.start_date + 'T00:00:00');
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = phase.end_date ? new Date(phase.end_date + 'T00:00:00') : new Date();
+      endDate.setHours(0, 0, 0, 0);
+      
+      if (date >= startDate && date <= endDate) {
+        return phase.phase_type === 'period' ? 'bg-red-200 border-2 border-red-500 text-gray-900' : 'bg-blue-200 border-2 border-blue-500 text-gray-900';
+      }
+    }
+    return '';
   };
 
   const changeMonth = (offset: number) => {
@@ -160,6 +271,7 @@ export default function WellnessTemplate() {
 
     for (let day = 1; day <= daysInMonth; day++) {
       const isSelected = isDateSelected(day);
+      const phaseColor = getDatePhaseColor(day);
       days.push(
         <button
           key={day}
@@ -167,7 +279,7 @@ export default function WellnessTemplate() {
           className={`h-12 flex items-center justify-center rounded-lg text-base font-medium transition-all ${
             isSelected
               ? 'bg-gray-900 text-white'
-              : 'text-gray-800 hover:bg-gray-200'
+              : phaseColor || 'text-gray-800 hover:bg-gray-200'
           }`}
         >
           {day}
@@ -178,16 +290,16 @@ export default function WellnessTemplate() {
     return days;
   };
 
-  const getTypeLabel = (type: HealthType) => {
-    return healthOptions.find(opt => opt.type === type)?.label || type;
+  const getPhaseLabel = (phaseType: 'period' | 'ovulation') => {
+    return phaseType === 'period' ? 'Periodo' : 'Ovulación';
   };
 
-  const getTypeColor = (type: HealthType) => {
-    return healthOptions.find(opt => opt.type === type)?.color || 'bg-gray-500';
+  const getPhaseColor = (phaseType: 'period' | 'ovulation') => {
+    return phaseType === 'period' ? 'bg-red-500' : 'bg-blue-500';
   };
 
-  const sortedHistory = [...healthHistory].sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
+  const sortedPhases = [...cyclePhases].sort((a, b) => 
+    new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
   );
 
   return (
@@ -208,7 +320,7 @@ export default function WellnessTemplate() {
         
         {showError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl text-center animate-pulse">
-            Por favor selecciona al menos una fecha en el calendario
+            {errorMessage}
           </div>
         )}
 
@@ -216,7 +328,7 @@ export default function WellnessTemplate() {
         <button
           onClick={handleAddDate}
           className={`w-full py-4 rounded-2xl text-white text-lg font-semibold mb-6 transition-all ${
-            selectedDates.length > 0
+            selectedDate
               ? 'bg-pink-500 hover:bg-pink-600'
               : 'bg-pink-300'
           }`}
@@ -307,46 +419,58 @@ export default function WellnessTemplate() {
           </div>
 
           <div className="space-y-3">
-            {sortedHistory.length === 0 ? (
+            {sortedPhases.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
                 <p className="text-gray-400 text-sm">
                   No hay registros agregados aún
                 </p>
               </div>
             ) : (
-              sortedHistory.map(entry => (
+              sortedPhases.map(phase => (
                 <div
-                  key={entry.id}
+                  key={phase.id}
                   className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
                 >
-                  <div className={`w-3 h-3 rounded-full ${getTypeColor(entry.type)}`} />
+                  <div className={`w-3 h-3 rounded-full ${getPhaseColor(phase.phase_type)}`} />
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">
-                      {getTypeLabel(entry.type)}
-                      {entry.type === 'intimidad' && entry.usedCondom !== undefined && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          ({entry.usedCondom ? 'Con condón' : 'Sin condón'})
-                        </span>
-                      )}
-                      {entry.type === 'anticonceptivo' && entry.contraceptiveMethod && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          ({entry.contraceptiveMethod})
+                      {getPhaseLabel(phase.phase_type)}
+                      {!phase.end_date && (
+                        <span className="ml-2 text-xs text-green-600 font-semibold">
+                          En curso
                         </span>
                       )}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {new Date(entry.date).toLocaleDateString('es-ES', { 
+                      Inicio: {new Date(phase.start_date).toLocaleDateString('es-ES', { 
                         day: 'numeric', 
                         month: 'long', 
                         year: 'numeric' 
                       })}
                     </p>
-                    {entry.note && (
-                      <p className="text-xs text-gray-600 mt-1 italic">
-                        "{entry.note}"
+                    {phase.end_date && (
+                      <p className="text-sm text-gray-500">
+                        Fin: {new Date(phase.end_date).toLocaleDateString('es-ES', { 
+                          day: 'numeric', 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })}
                       </p>
                     )}
                   </div>
+                  {!phase.end_date && (
+                    <button
+                      onClick={() => handleEndPhase(phase.id)}
+                      disabled={isLoading}
+                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
+                        isLoading 
+                          ? 'bg-pink-300 cursor-not-allowed' 
+                          : 'bg-pink-500 hover:bg-pink-600'
+                      }`}
+                    >
+                      {isLoading ? 'Finalizando...' : 'Finalizar'}
+                    </button>
+                  )}
                 </div>
               ))
             )}
@@ -361,12 +485,24 @@ export default function WellnessTemplate() {
               ¿Qué deseas agregar?
             </h3>
             
+            {isLoading && (
+              <div className="mb-4 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+                <p className="text-sm text-gray-600 mt-2">Guardando...</p>
+              </div>
+            )}
+            
             <div className="space-y-3 mb-6">
               {healthOptions.map(option => (
                 <button
                   key={option.type}
                   onClick={() => handleSelectHealthType(option.type)}
-                  className="w-full py-4 px-6 bg-gray-50 hover:bg-gray-100 rounded-xl text-left font-medium text-gray-900 transition-all flex items-center gap-3"
+                  disabled={isLoading}
+                  className={`w-full py-4 px-6 rounded-xl text-left font-medium transition-all flex items-center gap-3 ${
+                    isLoading
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-50 hover:bg-gray-100 text-gray-900'
+                  }`}
                 >
                   <div className={`w-4 h-4 rounded-full ${option.color}`} />
                   {option.label}
@@ -376,7 +512,12 @@ export default function WellnessTemplate() {
 
             <button
               onClick={() => setShowPopup(false)}
-              className="w-full py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all"
+              disabled={isLoading}
+              className={`w-full py-3 rounded-xl font-medium transition-all ${
+                isLoading
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+              }`}
             >
               Cancelar
             </button>
@@ -437,15 +578,25 @@ export default function WellnessTemplate() {
             <div className="flex gap-3">
               <button
                 onClick={handleCancelIntimacy}
-                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all"
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
               >
                 Atrás
               </button>
               <button
                 onClick={handleSaveIntimacy}
-                className="flex-1 py-3 bg-pink-500 hover:bg-pink-600 rounded-xl font-medium text-white transition-all"
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
+                  isLoading
+                    ? 'bg-pink-300 cursor-not-allowed'
+                    : 'bg-pink-500 hover:bg-pink-600'
+                }`}
               >
-                Guardar
+                {isLoading ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
@@ -475,20 +626,25 @@ export default function WellnessTemplate() {
             <div className="flex gap-3">
               <button
                 onClick={handleCancelContraceptive}
-                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all"
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
               >
                 Atrás
               </button>
               <button
                 onClick={handleSaveContraceptive}
-                disabled={!contraceptiveMethod.trim()}
+                disabled={!contraceptiveMethod.trim() || isLoading}
                 className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
-                  contraceptiveMethod.trim()
-                    ? 'bg-pink-500 hover:bg-pink-600'
-                    : 'bg-pink-300 cursor-not-allowed'
+                  !contraceptiveMethod.trim() || isLoading
+                    ? 'bg-pink-300 cursor-not-allowed'
+                    : 'bg-pink-500 hover:bg-pink-600'
                 }`}
               >
-                Guardar
+                {isLoading ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
