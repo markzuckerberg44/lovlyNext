@@ -24,6 +24,7 @@ interface ContraceptiveEvent {
   id: string;
   event_date: string;
   method: string | null;
+  notes: string | null;
 }
 
 export default function WellnessTemplate() {
@@ -38,10 +39,12 @@ export default function WellnessTemplate() {
   const [usedCondom, setUsedCondom] = useState<boolean | null>(null);
   const [intimacyNote, setIntimacyNote] = useState('');
   const [contraceptiveMethod, setContraceptiveMethod] = useState('');
+  const [contraceptiveNote, setContraceptiveNote] = useState('');
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('Por favor selecciona al menos una fecha en el calendario');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'periodo' | 'ovulacion' | 'intimidad' | 'anticonceptivo'>('all');
 
   const healthOptions: { type: HealthType; label: string; color: string }[] = [
     { type: 'ovulacion', label: 'Ovulación', color: 'bg-blue-500' },
@@ -72,6 +75,14 @@ export default function WellnessTemplate() {
     if (intimacyRes.ok) {
       const intimacyData = await intimacyRes.json();
       setIntimacyEvents(intimacyData.data || []);
+    }
+
+    const contraceptiveRes = await fetch('/api/wellness/contraceptive', {
+      credentials: 'include',
+    });
+    if (contraceptiveRes.ok) {
+      const contraceptiveData = await contraceptiveRes.json();
+      setContraceptiveEvents(contraceptiveData.data || []);
     }
   };
 
@@ -183,12 +194,14 @@ export default function WellnessTemplate() {
           body: JSON.stringify({
             event_date: selectedDate.toISOString().split('T')[0],
             method: contraceptiveMethod.trim(),
+            notes: contraceptiveNote.trim() || null,
           }),
         });
         await loadHealthData();
         setSelectedDate(null);
         setShowContraceptivePopup(false);
         setContraceptiveMethod('');
+        setContraceptiveNote('');
       } finally {
         setIsLoading(false);
       }
@@ -198,6 +211,7 @@ export default function WellnessTemplate() {
   const handleCancelContraceptive = () => {
     setShowContraceptivePopup(false);
     setContraceptiveMethod('');
+    setContraceptiveNote('');
     setShowPopup(true);
   };
 
@@ -333,9 +347,16 @@ export default function WellnessTemplate() {
     return phaseType === 'period' ? 'bg-red-500' : 'bg-blue-500';
   };
 
-  const sortedPhases = [...cyclePhases].sort((a, b) => 
+  const sortedPhases = cyclePhases.sort((a, b) => 
     new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
   );
+
+  const filteredPhases = filter === 'all' || filter === 'periodo' || filter === 'ovulacion'
+    ? sortedPhases.filter(phase => filter === 'all' || phase.phase_type === filter)
+    : [];
+  
+  const filteredIntimacy = filter === 'all' || filter === 'intimidad' ? intimacyEvents : [];
+  const filteredContraceptive = filter === 'all' || filter === 'anticonceptivo' ? contraceptiveEvents : [];
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-20">
@@ -453,16 +474,76 @@ export default function WellnessTemplate() {
             <div className="flex-1 h-px bg-gray-300" />
           </div>
 
+          <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Filtrar por tipo:</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  filter === 'all'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setFilter('periodo')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                  filter === 'periodo'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-red-50 text-red-700 hover:bg-red-100'
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-current" />
+                Periodo
+              </button>
+              <button
+                onClick={() => setFilter('ovulacion')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                  filter === 'ovulacion'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-current" />
+                Ovulación
+              </button>
+              <button
+                onClick={() => setFilter('intimidad')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                  filter === 'intimidad'
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-pink-50 text-pink-700 hover:bg-pink-100'
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-current" />
+                Intimidad
+              </button>
+              <button
+                onClick={() => setFilter('anticonceptivo')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                  filter === 'anticonceptivo'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-green-50 text-green-700 hover:bg-green-100'
+                }`}
+              >
+                <div className="w-2 h-2 rounded-full bg-current" />
+                Anticonceptivo
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-3">
-            {sortedPhases.length === 0 && intimacyEvents.length === 0 ? (
+            {filteredPhases.length === 0 && filteredIntimacy.length === 0 && filteredContraceptive.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
                 <p className="text-gray-400 text-sm">
-                  No hay registros agregados aún
+                  {filter === 'all' ? 'No hay registros agregados aún' : 'No hay registros de este tipo'}
                 </p>
               </div>
             ) : (
               <>
-                {sortedPhases.map(phase => (
+                {filteredPhases.map(phase => (
                   <div
                     key={phase.id}
                     className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
@@ -510,7 +591,7 @@ export default function WellnessTemplate() {
                   </div>
                 ))}
                 
-                {intimacyEvents.map(event => (
+                {filteredIntimacy.map(event => (
                   <div
                     key={event.id}
                     className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
@@ -529,6 +610,35 @@ export default function WellnessTemplate() {
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
                         {event.used_condom ? '✓ Con condón' : '✗ Sin condón'}
+                      </p>
+                      {event.notes && (
+                        <p className="text-xs text-gray-500 italic mt-1">
+                          {event.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {filteredContraceptive.map(event => (
+                  <div
+                    key={event.id}
+                    className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
+                  >
+                    <div className="w-3 h-3 rounded-full bg-green-400" />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        Anticonceptivo
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(event.event_date + 'T00:00:00').toLocaleDateString('es-ES', { 
+                          day: 'numeric', 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Método: {event.method}
                       </p>
                       {event.notes && (
                         <p className="text-xs text-gray-500 italic mt-1">
@@ -686,6 +796,19 @@ export default function WellnessTemplate() {
                 onChange={(e) => setContraceptiveMethod(e.target.value)}
                 placeholder="Ej: Píldora, DIU, Implante..."
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent placeholder:opacity-40 text-gray-900"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                Notas (opcional)
+              </label>
+              <textarea
+                value={contraceptiveNote}
+                onChange={(e) => setContraceptiveNote(e.target.value)}
+                placeholder="Agrega notas adicionales..."
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent placeholder:opacity-40 text-gray-900 resize-none"
               />
             </div>
 
