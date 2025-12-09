@@ -2,19 +2,22 @@
 
 import { useState } from 'react';
 import BottomNavBar from '../molecules/BottomNavBar';
-
-type HealthEntry = {
-  id: string;
-  type: 'ovulacion' | 'periodo' | 'anticonceptivo' | 'intimidad';
-  date: Date;
-};
+import { useAppDispatch, useAppSelector } from '@/app/lib/store/hooks';
+import { addHealthEntry, type HealthEntry as ReduxHealthEntry } from '@/app/lib/store/slices/wellnessSlice';
 
 type HealthType = 'ovulacion' | 'periodo' | 'anticonceptivo' | 'intimidad';
 
 export default function WellnessTemplate() {
+  const dispatch = useAppDispatch();
+  const healthHistory = useAppSelector((state) => state.wellness.healthHistory);
+  
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
-  const [healthHistory, setHealthHistory] = useState<HealthEntry[]>([]);
   const [showPopup, setShowPopup] = useState(false);
+  const [showIntimacyPopup, setShowIntimacyPopup] = useState(false);
+  const [showContraceptivePopup, setShowContraceptivePopup] = useState(false);
+  const [usedCondom, setUsedCondom] = useState<boolean | null>(null);
+  const [intimacyNote, setIntimacyNote] = useState('');
+  const [contraceptiveMethod, setContraceptiveMethod] = useState('');
   const [showError, setShowError] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -49,16 +52,71 @@ export default function WellnessTemplate() {
   };
 
   const handleSelectHealthType = (type: HealthType) => {
+    if (type === 'intimidad') {
+      setShowPopup(false);
+      setShowIntimacyPopup(true);
+    } else if (type === 'anticonceptivo') {
+      setShowPopup(false);
+      setShowContraceptivePopup(true);
+    } else {
+      selectedDates.forEach(date => {
+        const newEntry: ReduxHealthEntry = {
+          id: Date.now().toString() + Math.random(),
+          type,
+          date: date.toISOString(),
+        };
+        dispatch(addHealthEntry(newEntry));
+      });
+      setSelectedDates([]);
+      setShowPopup(false);
+    }
+  };
+
+  const handleSaveContraceptive = () => {
+    if (contraceptiveMethod.trim()) {
+      selectedDates.forEach(date => {
+        const newEntry: ReduxHealthEntry = {
+          id: Date.now().toString() + Math.random(),
+          type: 'anticonceptivo',
+          date: date.toISOString(),
+          contraceptiveMethod: contraceptiveMethod.trim(),
+        };
+        dispatch(addHealthEntry(newEntry));
+      });
+      setSelectedDates([]);
+      setShowContraceptivePopup(false);
+      setContraceptiveMethod('');
+    }
+  };
+
+  const handleCancelContraceptive = () => {
+    setShowContraceptivePopup(false);
+    setContraceptiveMethod('');
+    setShowPopup(true);
+  };
+
+  const handleSaveIntimacy = () => {
     selectedDates.forEach(date => {
-      const newEntry: HealthEntry = {
+      const newEntry: ReduxHealthEntry = {
         id: Date.now().toString() + Math.random(),
-        type,
-        date,
+        type: 'intimidad',
+        date: date.toISOString(),
+        usedCondom: usedCondom ?? undefined,
+        note: intimacyNote.trim() || undefined,
       };
-      setHealthHistory(prev => [...prev, newEntry]);
+      dispatch(addHealthEntry(newEntry));
     });
     setSelectedDates([]);
-    setShowPopup(false);
+    setShowIntimacyPopup(false);
+    setUsedCondom(null);
+    setIntimacyNote('');
+  };
+
+  const handleCancelIntimacy = () => {
+    setShowIntimacyPopup(false);
+    setUsedCondom(null);
+    setIntimacyNote('');
+    setShowPopup(true);
   };
 
   const toggleDateSelection = (day: number) => {
@@ -96,12 +154,10 @@ export default function WellnessTemplate() {
   const renderCalendar = () => {
     const days = [];
     
-    // Empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(<div key={`empty-${i}`} className="h-12" />);
     }
 
-    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const isSelected = isDateSelected(day);
       days.push(
@@ -130,13 +186,15 @@ export default function WellnessTemplate() {
     return healthOptions.find(opt => opt.type === type)?.color || 'bg-gray-500';
   };
 
-  const sortedHistory = [...healthHistory].sort((a, b) => b.date.getTime() - a.date.getTime());
+  const sortedHistory = [...healthHistory].sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-20">
       <div className="max-w-screen-xl mx-auto p-6">
         
-        {/* Header */}
+        
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             Salud y bienestar
@@ -147,14 +205,14 @@ export default function WellnessTemplate() {
           </p>
         </div>
 
-        {/* Error Message */}
+        
         {showError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl text-center animate-pulse">
             Por favor selecciona al menos una fecha en el calendario
           </div>
         )}
 
-        {/* Add Date Button */}
+        
         <button
           onClick={handleAddDate}
           className={`w-full py-4 rounded-2xl text-white text-lg font-semibold mb-6 transition-all ${
@@ -166,9 +224,9 @@ export default function WellnessTemplate() {
           Agregar fecha
         </button>
 
-        {/* Calendar */}
+        
         <div className="bg-white rounded-3xl shadow-sm p-6 mb-6">
-          {/* Month/Year Selector */}
+          
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => changeMonth(-1)}
@@ -223,7 +281,7 @@ export default function WellnessTemplate() {
             </button>
           </div>
 
-          {/* Day Names */}
+          
           <div className="grid grid-cols-7 gap-2 mb-2">
             {dayNames.map(day => (
               <div key={day} className="text-center text-sm font-medium text-gray-500">
@@ -232,13 +290,13 @@ export default function WellnessTemplate() {
             ))}
           </div>
 
-          {/* Calendar Days */}
+          
           <div className="grid grid-cols-7 gap-2">
             {renderCalendar()}
           </div>
         </div>
 
-        {/* History Section */}
+        
         <div className="mb-4">
           <div className="flex items-center gap-4 mb-4">
             <div className="flex-1 h-px bg-gray-300" />
@@ -263,14 +321,31 @@ export default function WellnessTemplate() {
                 >
                   <div className={`w-3 h-3 rounded-full ${getTypeColor(entry.type)}`} />
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{getTypeLabel(entry.type)}</p>
+                    <p className="font-medium text-gray-900">
+                      {getTypeLabel(entry.type)}
+                      {entry.type === 'intimidad' && entry.usedCondom !== undefined && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({entry.usedCondom ? 'Con condón' : 'Sin condón'})
+                        </span>
+                      )}
+                      {entry.type === 'anticonceptivo' && entry.contraceptiveMethod && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({entry.contraceptiveMethod})
+                        </span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-500">
-                      {entry.date.toLocaleDateString('es-ES', { 
+                      {new Date(entry.date).toLocaleDateString('es-ES', { 
                         day: 'numeric', 
                         month: 'long', 
                         year: 'numeric' 
                       })}
                     </p>
+                    {entry.note && (
+                      <p className="text-xs text-gray-600 mt-1 italic">
+                        "{entry.note}"
+                      </p>
+                    )}
                   </div>
                 </div>
               ))
@@ -279,7 +354,6 @@ export default function WellnessTemplate() {
         </div>
       </div>
 
-      {/* Popup Modal */}
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
@@ -306,6 +380,117 @@ export default function WellnessTemplate() {
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {showIntimacyPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+              Detalles de intimidad
+            </h3>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">
+                  ¿Se usó condón?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setUsedCondom(true)}
+                    className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                      usedCondom === true
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Sí
+                  </button>
+                  <button
+                    onClick={() => setUsedCondom(false)}
+                    className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+                      usedCondom === false
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Nota (opcional)
+                </label>
+                <textarea
+                  value={intimacyNote}
+                  onChange={(e) => setIntimacyNote(e.target.value)}
+                  placeholder="Agrega una nota..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent placeholder:opacity-40 text-gray-900"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelIntimacy}
+                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all"
+              >
+                Atrás
+              </button>
+              <button
+                onClick={handleSaveIntimacy}
+                className="flex-1 py-3 bg-pink-500 hover:bg-pink-600 rounded-xl font-medium text-white transition-all"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showContraceptivePopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+              Método anticonceptivo
+            </h3>
+            
+            <div className="mb-6">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">
+                ¿Qué método usaste?
+              </label>
+              <input
+                type="text"
+                value={contraceptiveMethod}
+                onChange={(e) => setContraceptiveMethod(e.target.value)}
+                placeholder="Ej: Píldora, DIU, Implante..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent placeholder:opacity-40 text-gray-900"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelContraceptive}
+                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all"
+              >
+                Atrás
+              </button>
+              <button
+                onClick={handleSaveContraceptive}
+                disabled={!contraceptiveMethod.trim()}
+                className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
+                  contraceptiveMethod.trim()
+                    ? 'bg-pink-500 hover:bg-pink-600'
+                    : 'bg-pink-300 cursor-not-allowed'
+                }`}
+              >
+                Guardar
+              </button>
+            </div>
           </div>
         </div>
       )}
