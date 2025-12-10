@@ -35,9 +35,26 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Define protected routes
+  const protectedRoutes = ['/homepage', '/wellness', '/panoramas', '/profile', '/expenses'];
+  const authRoutes = ['/login', '/register'];
+  const isProtectedRoute = protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route));
+  const isAuthRoute = authRoutes.some(route => request.nextUrl.pathname.startsWith(route));
+
+  // Redirect to login if accessing protected route without authentication
+  if (isProtectedRoute && !user) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Redirect to homepage if accessing auth routes while authenticated
+  if (isAuthRoute && user) {
+    return NextResponse.redirect(new URL('/homepage', request.url));
+  }
 
   return response;
+}
 }
 
 export const config = {
