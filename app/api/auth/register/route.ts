@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/app/lib/supabase/server';
+import { createServiceClient } from '@/app/lib/supabase/service';
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
 
-    // Create auth user - profile will be created automatically by database trigger
+    // Create auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -48,6 +49,26 @@ export async function POST(request: Request) {
         { error: 'Este email ya está registrado. Por favor inicia sesión.' },
         { status: 400 }
       );
+    }
+
+    // Use service client to create profile (bypasses RLS)
+    try {
+      const serviceClient = createServiceClient();
+      const { error: profileError } = await serviceClient
+        .from('profiles')
+        .insert({
+          id: authData.user.id,
+          display_name: displayName,
+          gender: gender,
+        });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        // Profile creation failed but user exists, they can try logging in
+      }
+    } catch (profileErr) {
+      console.error('Service client error:', profileErr);
+      // Continue anyway, profile can be created later
     }
 
     return NextResponse.json({
