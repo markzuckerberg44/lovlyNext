@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
-import { SupabaseAuthRepository } from '@/app/lib/repositories/supabase-auth.repository';
-import { LogoutUseCase } from '@/app/lib/usecases/auth.usecases';
+import { createClient } from '@/app/lib/supabase/server';
 
 export async function POST() {
   try {
-    const authRepository = new SupabaseAuthRepository();
-    const logoutUseCase = new LogoutUseCase(authRepository);
+    const supabase = await createClient();
+    
+    const { error } = await supabase.auth.signOut();
 
-    await logoutUseCase.execute();
+    if (error) {
+      return NextResponse.json(
+        { error: error.message || 'Error al cerrar sesión' },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({ message: 'Sesión cerrada exitosamente' }, { status: 200 });
   } catch (error: any) {

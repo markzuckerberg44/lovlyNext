@@ -8,6 +8,7 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
 
+    // Create auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -40,18 +41,32 @@ export async function POST(request: Request) {
       );
     }
 
+    // Create profile in public.profiles table
+    // The invite_code will be generated automatically by the database trigger
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        display_name: displayName,
+        gender: gender,
+      });
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // If profile creation fails, we should delete the auth user
+      // but for now just log the error
+      return NextResponse.json(
+        { error: 'Error al crear perfil de usuario' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({
       user: {
         id: authData.user.id,
         email: authData.user.email!,
       },
-      profile: {
-        id: authData.user.id,
-        display_name: displayName,
-        gender,
-        invite_code: null,
-        created_at: new Date(),
-      },
+      message: 'Usuario registrado exitosamente',
     }, { status: 201 });
   } catch (error: any) {
     console.error('Register error:', error);
