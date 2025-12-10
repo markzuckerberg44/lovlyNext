@@ -1,4 +1,5 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -16,33 +17,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('piggy_bank_loans')
-      .insert({
+    const data = await prisma.piggy_bank_loans.create({
+      data: {
         couple_id: coupleMember.couple_id,
         lender_user_id: lender_user_id || user.id,
         borrower_user_id,
         amount,
         description: description || null,
-        loan_date: loan_date || new Date().toISOString().split('T')[0],
+        loan_date: loan_date ? new Date(loan_date) : new Date(),
         settled: false,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+      }
+    });
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
@@ -59,25 +53,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('piggy_bank_loans')
-      .select('*, lender:lender_user_id(display_name), borrower:borrower_user_id(display_name)')
-      .eq('couple_id', coupleMember.couple_id)
-      .order('loan_date', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.piggy_bank_loans.findMany({
+      where: { couple_id: coupleMember.couple_id },
+      include: {
+        lender: { select: { display_name: true } },
+        borrower: { select: { display_name: true } }
+      },
+      orderBy: { loan_date: 'desc' }
+    });
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
@@ -102,19 +94,13 @@ export async function PATCH(request: NextRequest) {
 
     const updateData: any = { settled };
     if (settled) {
-      updateData.settled_at = new Date().toISOString();
+      updateData.settled_at = new Date();
     }
 
-    const { data, error } = await supabase
-      .from('piggy_bank_loans')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.piggy_bank_loans.update({
+      where: { id },
+      data: updateData
+    });
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -16,40 +17,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .single();
+    const profile = await prisma.profiles.findUnique({
+      where: { id: user.id },
+      select: { id: true }
+    });
 
-    if (profileError || !profile) {
+    if (!profile) {
       return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('cycle_phases')
-      .insert({
+    const data = await prisma.cycle_phases.create({
+      data: {
         user_id: user.id,
         couple_id: coupleMember.couple_id,
         phase_type,
-        start_date,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+        start_date: new Date(start_date),
+      }
+    });
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
@@ -66,25 +59,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('cycle_phases')
-      .select('*')
-      .eq('couple_id', coupleMember.couple_id)
-      .order('start_date', { ascending: false });
+    const phases = await prisma.cycle_phases.findMany({
+      where: { couple_id: coupleMember.couple_id },
+      orderBy: { start_date: 'desc' }
+    });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    // Convertir fechas a ISO string para evitar problemas de serialización
+    const data = phases.map(phase => ({
+      ...phase,
+      start_date: phase.start_date.toISOString().split('T')[0],
+      end_date: phase.end_date ? phase.end_date.toISOString().split('T')[0] : null,
+      created_at: phase.created_at.toISOString()
+    }));
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
@@ -107,17 +102,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('cycle_phases')
-      .update({ end_date })
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.cycle_phases.update({
+      where: { 
+        id,
+        user_id: user.id 
+      },
+      data: { end_date: new Date(end_date) }
+    });
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
@@ -141,14 +132,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Falta el ID del periodo' }, { status: 400 });
     }
 
-    // Verificar que el periodo pertenece al usuario
-    const { data: cyclePhase, error: fetchError } = await supabase
-      .from('cycle_phases')
-      .select('user_id')
-      .eq('id', id)
-      .single();
+    const cyclePhase = await prisma.cycle_phases.findUnique({
+      where: { id },
+      select: { user_id: true }
+    });
 
-    if (fetchError || !cyclePhase) {
+    if (!cyclePhase) {
       return NextResponse.json({ error: 'Periodo no encontrado' }, { status: 404 });
     }
 
@@ -156,14 +145,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'No tienes permiso para eliminar este periodo' }, { status: 403 });
     }
 
-    const { error } = await supabase
-      .from('cycle_phases')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    await prisma.cycle_phases.delete({
+      where: { id }
+    });
 
     return NextResponse.json({ message: 'Periodo eliminado correctamente' }, { status: 200 });
   } catch (error) {

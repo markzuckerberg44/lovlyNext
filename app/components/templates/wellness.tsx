@@ -47,7 +47,6 @@ export default function WellnessTemplate() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'periodo' | 'ovulacion' | 'intimidad' | 'anticonceptivo'>(() => {
-    // Cargar filtro guardado al inicializar el estado
     if (typeof window !== 'undefined') {
       const savedFilter = localStorage.getItem('wellnessFilter');
       if (savedFilter && (savedFilter === 'all' || savedFilter === 'periodo' || savedFilter === 'ovulacion' || savedFilter === 'intimidad' || savedFilter === 'anticonceptivo')) {
@@ -57,16 +56,14 @@ export default function WellnessTemplate() {
     return 'all';
   });
 
-  // Guardar filtro en localStorage cuando cambie
   useEffect(() => {
     localStorage.setItem('wellnessFilter', filter);
   }, [filter]);
 
   const healthOptions: { type: HealthType; label: string; color: string }[] = [
-    { type: 'ovulacion', label: 'Ovulación', color: 'bg-blue-500' },
-    { type: 'periodo', label: 'Periodo', color: 'bg-red-500' },
-    { type: 'anticonceptivo', label: 'Anticonceptivo', color: 'bg-green-500' },
-    { type: 'intimidad', label: 'Intimidad', color: 'bg-pink-500' },
+    { type: 'periodo', label: 'Periodo', color: 'bg-[#FA4B63]' },
+    { type: 'anticonceptivo', label: 'Anticonceptivo', color: 'bg-[#38CB73]' },
+    { type: 'intimidad', label: 'Intimidad', color: 'bg-[#FFBBDF]' },
   ];
 
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -317,14 +314,22 @@ export default function WellnessTemplate() {
     date.setHours(0, 0, 0, 0);
 
     for (const phase of cyclePhases) {
-      const startDate = new Date(phase.start_date + 'T00:00:00');
+      // Crear fecha desde string YYYY-MM-DD sin problemas de zona horaria
+      const [startYear, startMonth, startDay] = phase.start_date.split('-').map(Number);
+      const startDate = new Date(startYear, startMonth - 1, startDay);
       startDate.setHours(0, 0, 0, 0);
       
-      const endDate = phase.end_date ? new Date(phase.end_date + 'T00:00:00') : new Date();
+      let endDate: Date;
+      if (phase.end_date) {
+        const [endYear, endMonth, endDay] = phase.end_date.split('-').map(Number);
+        endDate = new Date(endYear, endMonth - 1, endDay);
+      } else {
+        endDate = new Date();
+      }
       endDate.setHours(0, 0, 0, 0);
       
       if (date >= startDate && date <= endDate) {
-        return phase.phase_type === 'period' ? 'bg-red-200 border-2 border-red-500 text-gray-900' : 'bg-blue-200 border-2 border-blue-500 text-gray-900';
+        return phase.phase_type === 'period' ? 'border-2 text-gray-900' : 'bg-blue-200 border-2 border-blue-500 text-gray-900';
       }
     }
     return '';
@@ -364,6 +369,7 @@ export default function WellnessTemplate() {
           key={day}
           onClick={() => !isFutureDate && toggleDateSelection(day)}
           disabled={isFutureDate}
+          style={phaseColor && !isSelected ? { backgroundColor: '#FF6A7F', borderColor: '#FF6A7F', color: 'white' } : undefined}
           className={`h-12 flex items-center justify-center rounded-lg text-base font-medium transition-all ${
             isFutureDate
               ? 'text-gray-400 opacity-60 cursor-not-allowed'
@@ -408,10 +414,10 @@ export default function WellnessTemplate() {
         
         
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl font-lg text-gray-900 mb-2 mt-6">
             Salud y bienestar
           </h1>
-          <p className="text-sm text-gray-600">
+          <p className="text-xs text-gray-600">
             Click aquí para ingresar fechas de ovulación,<br />
             periodo, intimidad o anticonceptivos
           </p>
@@ -427,10 +433,10 @@ export default function WellnessTemplate() {
         
         <button
           onClick={handleAddDate}
-          className={`w-full py-4 rounded-2xl text-white text-lg font-semibold mb-6 transition-all ${
+          className={`w-full py-4 rounded-2xl text-white text-sm font-md mb-6 transition-all ${
             selectedDate
-              ? 'bg-pink-500 hover:bg-pink-600'
-              : 'bg-pink-300'
+              ? 'bg-[#FA4B63] hover:bg-pink-600'
+              : 'bg-[#FF8697]'
           }`}
         >
           Agregar fecha
@@ -535,30 +541,19 @@ export default function WellnessTemplate() {
                 onClick={() => setFilter('periodo')}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
                   filter === 'periodo'
-                    ? 'bg-red-500 text-white'
-                    : 'bg-red-50 text-red-700 hover:bg-red-100'
+                    ? 'bg-[#FA4B63] text-white'
+                    : 'bg-red-50 text-[#FA4B63] hover:bg-red-100'
                 }`}
               >
                 <div className="w-2 h-2 rounded-full bg-current" />
                 Periodo
               </button>
               <button
-                onClick={() => setFilter('ovulacion')}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                  filter === 'ovulacion'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                }`}
-              >
-                <div className="w-2 h-2 rounded-full bg-current" />
-                Ovulación
-              </button>
-              <button
                 onClick={() => setFilter('intimidad')}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
                   filter === 'intimidad'
-                    ? 'bg-pink-500 text-white'
-                    : 'bg-pink-50 text-pink-700 hover:bg-pink-100'
+                    ? 'bg-[#FF78BF] text-white'
+                    : 'bg-pink-50 text-[#FF78BF] hover:bg-pink-100'
                 }`}
               >
                 <div className="w-2 h-2 rounded-full bg-current" />
@@ -568,8 +563,8 @@ export default function WellnessTemplate() {
                 onClick={() => setFilter('anticonceptivo')}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
                   filter === 'anticonceptivo'
-                    ? 'bg-green-500 text-white'
-                    : 'bg-green-50 text-green-700 hover:bg-green-100'
+                    ? 'bg-[#38CB73] text-white'
+                    : 'bg-green-50 text-[#38CB73] hover:bg-green-100'
                 }`}
               >
                 <div className="w-2 h-2 rounded-full bg-current" />
@@ -592,7 +587,10 @@ export default function WellnessTemplate() {
                     key={phase.id}
                     className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
                   >
-                    <div className={`w-3 h-3 rounded-full ${getPhaseColor(phase.phase_type)}`} />
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: phase.phase_type === 'period' ? '#FA4B63' : '#3b82f6' }}
+                    />
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">
                         {getPhaseLabel(phase.phase_type)}
@@ -603,19 +601,27 @@ export default function WellnessTemplate() {
                         )}
                       </p>
                       <p className="text-sm text-gray-500">
-                        Inicio: {new Date(phase.start_date).toLocaleDateString('es-ES', { 
-                          day: 'numeric', 
-                          month: 'long', 
-                          year: 'numeric' 
-                        })}
-                      </p>
-                      {phase.end_date && (
-                        <p className="text-sm text-gray-500">
-                          Fin: {new Date(phase.end_date).toLocaleDateString('es-ES', { 
+                        Inicio: {(() => {
+                          const [year, month, day] = phase.start_date.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          return date.toLocaleDateString('es-ES', { 
                             day: 'numeric', 
                             month: 'long', 
                             year: 'numeric' 
-                          })}
+                          });
+                        })()}
+                      </p>
+                      {phase.end_date && (
+                        <p className="text-sm text-gray-500">
+                          Fin: {(() => {
+                            const [year, month, day] = phase.end_date.split('-').map(Number);
+                            const date = new Date(year, month - 1, day);
+                            return date.toLocaleDateString('es-ES', { 
+                              day: 'numeric', 
+                              month: 'long', 
+                              year: 'numeric' 
+                            });
+                          })()}
                         </p>
                       )}
                     </div>
@@ -626,8 +632,8 @@ export default function WellnessTemplate() {
                           disabled={isLoading}
                           className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
                             isLoading 
-                              ? 'bg-pink-300 cursor-not-allowed' 
-                              : 'bg-pink-500 hover:bg-pink-600'
+                              ? 'bg-gray-400 cursor-not-allowed' 
+                              : 'bg-gray-500 hover:bg-gray-600'
                           }`}
                         >
                           {isLoading ? 'Finalizando...' : 'Finalizar'}
@@ -640,13 +646,25 @@ export default function WellnessTemplate() {
                             setShowDeleteConfirm(true);
                           }}
                           disabled={isLoading}
-                          className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
+                          className={`p-2 text-white rounded-lg transition-all ${
                             isLoading 
-                              ? 'bg-red-300 cursor-not-allowed' 
-                              : 'bg-red-500 hover:bg-red-600'
+                              ? 'bg-[#FA4B63] cursor-not-allowed' 
+                              : 'bg-[#FA4B63] hover:bg-[#e63950]'
                           }`}
                         >
-                          Eliminar
+                          <svg 
+                            className="w-5 h-5" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" 
+                            />
+                          </svg>
                         </button>
                       )}
                     </div>
@@ -658,17 +676,21 @@ export default function WellnessTemplate() {
                     key={event.id}
                     className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
                   >
-                    <div className="w-3 h-3 rounded-full bg-pink-400" />
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#FFBBDF' }} />
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">
                         Intimidad
                       </p>
                       <p className="text-sm text-gray-500">
-                        {new Date(event.event_date + 'T00:00:00').toLocaleDateString('es-ES', { 
-                          day: 'numeric', 
-                          month: 'long', 
-                          year: 'numeric' 
-                        })}
+                        {(() => {
+                          const [year, month, day] = event.event_date.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          return date.toLocaleDateString('es-ES', { 
+                            day: 'numeric', 
+                            month: 'long', 
+                            year: 'numeric' 
+                          });
+                        })()}
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
                         {event.used_condom ? '✓ Con condón' : '✗ Sin condón'}
@@ -687,17 +709,21 @@ export default function WellnessTemplate() {
                     key={event.id}
                     className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4"
                   >
-                    <div className="w-3 h-3 rounded-full bg-green-400" />
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#38CB73' }} />
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">
                         Anticonceptivo
                       </p>
                       <p className="text-sm text-gray-500">
-                        {new Date(event.event_date + 'T00:00:00').toLocaleDateString('es-ES', { 
-                          day: 'numeric', 
-                          month: 'long', 
-                          year: 'numeric' 
-                        })}
+                        {(() => {
+                          const [year, month, day] = event.event_date.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          return date.toLocaleDateString('es-ES', { 
+                            day: 'numeric', 
+                            month: 'long', 
+                            year: 'numeric' 
+                          });
+                        })()}
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
                         Método: {event.method}
@@ -719,7 +745,7 @@ export default function WellnessTemplate() {
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+            <h3 className="text-lg font-md text-gray-900 mb-6 text-center">
               ¿Qué deseas agregar?
             </h3>
             
@@ -735,10 +761,10 @@ export default function WellnessTemplate() {
                 <button
                   key={option.type}
                   onClick={() => handleSelectHealthType(option.type)}
-                  disabled={isLoading}
-                  className={`w-full py-4 px-6 rounded-xl text-left font-medium transition-all flex items-center gap-3 ${
-                    isLoading
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  disabled={isLoading || option.type === 'ovulacion'}
+                  className={`w-full py-4 px-6 rounded-xl text-left text-sm font-medium transition-all flex items-center gap-3 ${
+                    isLoading || option.type === 'ovulacion'
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
                       : 'bg-gray-50 hover:bg-gray-100 text-gray-900'
                   }`}
                 >
@@ -766,7 +792,7 @@ export default function WellnessTemplate() {
       {showIntimacyPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
+            <h3 className="text-lg font-md text-gray-900 mb-4 text-center">
               Detalles de intimidad
             </h3>
             
@@ -780,7 +806,7 @@ export default function WellnessTemplate() {
                     onClick={() => setUsedCondom(true)}
                     className={`flex-1 py-3 rounded-xl font-medium transition-all ${
                       usedCondom === true
-                        ? 'bg-pink-500 text-white'
+                        ? 'bg-[#FF6A7F] text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -790,7 +816,7 @@ export default function WellnessTemplate() {
                     onClick={() => setUsedCondom(false)}
                     className={`flex-1 py-3 rounded-xl font-medium transition-all ${
                       usedCondom === false
-                        ? 'bg-pink-500 text-white'
+                        ? 'bg-[#FF6A7F] text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -807,7 +833,7 @@ export default function WellnessTemplate() {
                   value={intimacyNote}
                   onChange={(e) => setIntimacyNote(e.target.value)}
                   placeholder="Agrega una nota..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent placeholder:opacity-40 text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-[#FF6A7F] focus:border-transparent placeholder:opacity-40 text-gray-900"
                   rows={3}
                 />
               </div>
@@ -819,7 +845,7 @@ export default function WellnessTemplate() {
                 disabled={isLoading}
                 className={`flex-1 py-3 rounded-xl font-medium transition-all ${
                   isLoading
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                 }`}
               >
@@ -830,8 +856,8 @@ export default function WellnessTemplate() {
                 disabled={isLoading}
                 className={`flex-1 py-3 rounded-xl font-medium text-white transition-all ${
                   isLoading
-                    ? 'bg-pink-300 cursor-not-allowed'
-                    : 'bg-pink-500 hover:bg-pink-600'
+                    ? 'bg-[#FA4B63] cursor-not-allowed'
+                    : 'bg-[#FA4B63] hover:bg-[#FA4B63]'
                 }`}
               >
                 {isLoading ? 'Guardando...' : 'Guardar'}
@@ -902,7 +928,6 @@ export default function WellnessTemplate() {
         </div>
       )}
 
-      {/* Popup de confirmación para eliminar periodo */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">

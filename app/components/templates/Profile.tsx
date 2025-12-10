@@ -60,7 +60,6 @@ const Profile = () => {
           }
         }
         
-        // Cargar fecha de relación
         if (data.relationshipStartDate) {
           const date = new Date(data.relationshipStartDate);
           setRelationshipStartDate(date.toLocaleDateString('es-ES', {
@@ -70,7 +69,6 @@ const Profile = () => {
           }));
         }
       } else if (res.status === 404) {
-        // Usuario no tiene pareja, esto es normal
         setHasCouple(false);
         setPartnerName('');
         setRelationshipStartDate('');
@@ -223,7 +221,6 @@ const Profile = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
-      {/* Header con avatar */}
       <div className="flex flex-col items-center pt-6 pb-4 bg-white">
         <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mb-2">
           <svg
@@ -238,40 +235,52 @@ const Profile = () => {
         <h1 className="text-lg font-medium text-gray-900">{displayName}</h1>
       </div>
 
-      {/* Contenido principal scrolleable */}
+
       <div className="flex-1 overflow-y-auto px-4 py-6 pb-24">
-        {/* Card de relación actual */}
         {showRelationshipCard && hasCouple && (
           <div className="bg-gray-800 rounded-3xl p-6 mb-6 text-white">
             <p className="text-sm mb-2 text-gray-300">Estas en una relación con:</p>
-            <h2 className="text-3xl font-light mb-4">{partnerName}</h2>
+            <h2 className="text-2xl font-light mb-4">{partnerName}</h2>
             {relationshipStartDate && (
               <p className="text-sm text-gray-400 mb-6">Desde: {relationshipStartDate}</p>
             )}
             <button
               onClick={handleEndRelationship}
-              className="w-full bg-pink-500 hover:bg-pink-600 text-white font-medium py-4 rounded-full transition-colors"
+              className="w-full bg-[#FA4B63] hover:bg-pink-600 text-white text-sm font-medium py-4 rounded-full transition-colors"
             >
               Terminar relación
             </button>
           </div>
         )}
 
-        {/* Card de código de unión */}
         <div className="bg-white rounded-3xl p-6 mb-6 shadow-sm">
           <h3 className="text-lg font-medium mb-4 text-gray-900">Código de unión:</h3>
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4">
             <p className="text-3xl font-light text-gray-900 tracking-wider">{inviteCode}</p>
           </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 mb-6 shadow-sm">
+          <h3 className="text-lg font-medium mb-2 text-gray-900">¿Quieres unirte a una relación?</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            {hasCouple 
+              ? 'Ya te encuentras en una relación activa.'
+              : 'Para unirte a una relación, necesitas el código de unión de tu pareja.'
+            }
+          </p>
           <button
             onClick={handleJoinRelationship}
-            className="w-full bg-teal-500 hover:bg-teal-600 text-white font-medium py-4 rounded-full transition-colors"
+            disabled={hasCouple}
+            className={`w-full font-medium py-4 rounded-full transition-colors ${
+              hasCouple
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-teal-500 hover:bg-teal-600 text-white'
+            }`}
           >
             Unirse a relación
           </button>
         </div>
 
-        {/* Sección de invitaciones */}
         <div className="mb-6">
           <div className="flex items-center mb-4">
             <div className="flex-1 h-px bg-gray-300"></div>
@@ -337,11 +346,10 @@ const Profile = () => {
           )}
         </div>
 
-        {/* Botón de cerrar sesión */}
         <div className="mb-6">
           <button
             onClick={handleLogout}
-            className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 rounded-full transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-[#FA4B63] hover:bg-[#e63950] text-white font-medium py-4 rounded-full transition-colors flex items-center justify-center gap-2"
           >
             <svg
               className="w-5 h-5"
@@ -361,7 +369,6 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Popup para unirse a relación */}
       {showJoinPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
@@ -414,7 +421,6 @@ const Profile = () => {
         </div>
       )}
 
-      {/* Popup de confirmación para terminar relación */}
       {showEndRelationshipPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
@@ -468,7 +474,6 @@ const Profile = () => {
         </div>
       )}
 
-      {/* Popup de mensajes (success/error) */}
       {showMessagePopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
@@ -530,7 +535,6 @@ const Profile = () => {
         </div>
       )}
 
-      {/* Bottom Navigation */}
       <BottomNavBar />
     </div>
   );

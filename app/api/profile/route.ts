@@ -1,4 +1,5 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -10,19 +11,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('display_name, invite_code')
-      .eq('id', user.id)
-      .single();
+    const profile = await prisma.profiles.findUnique({
+      where: { id: user.id },
+      select: { display_name: true, invite_code: true }
+    });
 
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    if (!profile) {
+      return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 500 });
     }
 
     return NextResponse.json({ 
-      display_name: profile?.display_name || null,
-      invite_code: profile?.invite_code || null,
+      display_name: profile.display_name || null,
+      invite_code: profile.invite_code || null,
       email: user.email
     });
   } catch (error) {

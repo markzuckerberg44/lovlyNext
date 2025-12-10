@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-neon": "^7.1.0",
+    "@prisma/adapter-pg": "^7.1.0",
     "@prisma/client": "^7.1.0",
     "@reduxjs/toolkit": "^2.11.1",
     "@supabase/ssr": "^0.8.0",
@@ -17,6 +20,7 @@
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
     "next": "16.0.8",
+    "pg": "^8.16.3",
     "react": "19.2.1",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.1",

@@ -1,4 +1,5 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -16,34 +17,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El título es requerido' }, { status: 400 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('todo_items')
-      .insert({
+    const data = await prisma.todo_items.create({
+      data: {
         couple_id: coupleMember.couple_id,
         created_by_user_id: user.id,
         title,
         description,
-        target_date: target_date || null,
+        target_date: target_date ? new Date(target_date) : null,
         target_time: target_time || null,
         status: 'todo',
         completed: false,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+      }
+    });
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
@@ -60,27 +54,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('todo_items')
-      .select('*')
-      .eq('couple_id', coupleMember.couple_id)
-      .order('created_at', { ascending: false });
+    const data = await prisma.todo_items.findMany({
+      where: { couple_id: coupleMember.couple_id },
+      orderBy: { created_at: 'desc' }
+    });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const formattedData = data.map(item => ({
+      ...item,
+      target_date: item.target_date ? item.target_date.toISOString().split('T')[0] : null
+    }));
 
-    return NextResponse.json({ data }, { status: 200 });
+    return NextResponse.json({ data: formattedData }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
@@ -105,16 +98,10 @@ export async function PATCH(request: NextRequest) {
     if (status !== undefined) updateData.status = status;
     if (completed !== undefined) updateData.completed = completed;
 
-    const { data, error } = await supabase
-      .from('todo_items')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.todo_items.update({
+      where: { id },
+      data: updateData
+    });
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
@@ -138,14 +125,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'ID es requerido' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('todo_items')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    await prisma.todo_items.delete({
+      where: { id }
+    });
 
     return NextResponse.json({ message: 'Panorama eliminado' }, { status: 200 });
   } catch (error) {

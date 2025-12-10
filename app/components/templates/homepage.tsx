@@ -19,7 +19,6 @@ import {
 } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 
-
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -131,7 +130,6 @@ export default function HomePageTemplate() {
     }
   };
 
-
   const getPeriodFrequencyData = () => {
     const monthsLabels: string[] = [];
     const monthsCounts: number[] = [];
@@ -168,9 +166,7 @@ export default function HomePageTemplate() {
     };
   };
 
-
   const getIntimacyFrequencyData = () => {
-    // Obtener últimos 6 meses
     const monthsLabels: string[] = [];
     const monthsCounts: number[] = [];
     const now = new Date();
@@ -180,7 +176,6 @@ export default function HomePageTemplate() {
       const monthName = date.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
       monthsLabels.push(monthName);
       
-      // Contar eventos de ese mes
       const count = intimacyEvents.filter(event => {
         const eventDate = new Date(event.event_date);
         return eventDate.getMonth() === date.getMonth() && 
@@ -298,19 +293,16 @@ export default function HomePageTemplate() {
     },
   };
 
-  // Procesar datos para el gráfico de torta de gastos y préstamos
   const getExpensesLoansData = () => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // Filtrar gastos del mes actual
     const monthlyExpenses = expenses.filter(expense => {
       const expenseDate = new Date(expense.expense_date);
       return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
     });
 
-    // Filtrar préstamos del mes actual
     const monthlyLoans = loans.filter(loan => {
       const loanDate = new Date(loan.loan_date);
       return loanDate.getMonth() === currentMonth && loanDate.getFullYear() === currentYear;
@@ -325,8 +317,8 @@ export default function HomePageTemplate() {
         {
           data: [totalExpenses, totalLoans],
           backgroundColor: [
-            'rgba(59, 130, 246, 0.8)', // Azul para gastos
-            'rgba(251, 146, 60, 0.8)', // Naranja para préstamos
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(251, 146, 60, 0.8)',
           ],
           borderColor: [
             'rgb(59, 130, 246)',
@@ -338,7 +330,6 @@ export default function HomePageTemplate() {
     };
   };
 
-  // Procesar datos para gráfico con Tick Configuration (Intimidad y Anticonceptivos)
   const getWellnessTickData = () => {
     const labels: (string | string[])[] = [];
     const intimacyCounts: number[] = [];
@@ -350,14 +341,12 @@ export default function HomePageTemplate() {
       const monthName = date.toLocaleDateString('es-ES', { month: 'long' });
       const year = date.getFullYear().toString();
       
-      // Para el primer mes, agregar como array [mes, año]
       if (i === 11) {
         labels.push([monthName.charAt(0).toUpperCase() + monthName.slice(1), year]);
       } else {
         labels.push(monthName.charAt(0).toUpperCase() + monthName.slice(1));
       }
       
-      // Contar eventos de intimidad
       const intimacyCount = intimacyEvents.filter(event => {
         const eventDate = new Date(event.event_date);
         return eventDate.getMonth() === date.getMonth() && 
@@ -365,7 +354,6 @@ export default function HomePageTemplate() {
       }).length;
       intimacyCounts.push(intimacyCount);
       
-      // Contar eventos de anticonceptivos
       const contraceptiveCount = contraceptiveEvents.filter(event => {
         const eventDate = new Date(event.event_date);
         return eventDate.getMonth() === date.getMonth() && 
@@ -441,7 +429,6 @@ export default function HomePageTemplate() {
       x: {
         ticks: {
           callback: function(this: any, val: any, index: number, ticks: any[]): string {
-            // Mostrar solo cada 2do label para evitar aglomeración
             const labels: any = this.chart.data.labels;
             return index % 2 === 0 ? (Array.isArray(labels[index]) ? labels[index].join(' ') : labels[index]) : '';
           },
@@ -499,24 +486,20 @@ export default function HomePageTemplate() {
     },
   };
 
-  // Procesar datos para scatter plot de periodos
   const getPeriodScatterData = () => {
     const scatterData: { x: number; y: number }[] = [];
     
-    // Filtrar solo periodos
     const periods = cyclePhases.filter(phase => phase.phase_type === 'period');
     
     periods.forEach((period) => {
       const startDate = new Date(period.start_date);
       const endDate = period.end_date ? new Date(period.end_date) : new Date();
       
-      // Generar puntos para cada día del periodo
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
-        // Ambos ejes usan timestamp (tiempo)
         scatterData.push({
-          x: currentDate.getTime(), // Timestamp para el eje X (tiempo)
-          y: currentDate.getTime(), // Timestamp para el eje Y (tiempo)
+          x: currentDate.getTime(),
+          y: currentDate.getTime(),
         });
         currentDate.setDate(currentDate.getDate() + 1);
       }
@@ -634,7 +617,6 @@ export default function HomePageTemplate() {
     <div className="min-h-screen bg-[#f5f5f5] pb-20">
       <div className="max-w-screen-xl mx-auto p-4">
         <div className="space-y-4">
-          
           <div className="bg-white rounded-3xl p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">

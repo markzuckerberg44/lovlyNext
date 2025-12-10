@@ -1,7 +1,8 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Send invitation by invite code
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -17,25 +18,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Código de invitación requerido' }, { status: 400 });
     }
 
-    // Check if user already has a couple
-    const { data: senderCouple, error: senderCoupleError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const senderCouple = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
     if (senderCouple) {
       return NextResponse.json({ error: 'Ya estás en una relación' }, { status: 400 });
     }
 
-    // Find receiver by invite code
-    const { data: receiver, error: receiverError } = await supabase
-      .from('profiles')
-      .select('id, display_name')
-      .eq('invite_code', invite_code)
-      .single();
+    const receiver = await prisma.profiles.findFirst({
+      where: { invite_code },
+      select: { id: true, display_name: true }
+    });
 
-    if (receiverError || !receiver) {
+    if (!receiver) {
       return NextResponse.json({ error: 'Código de invitación inválido' }, { status: 404 });
     }
 
@@ -43,45 +40,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No puedes enviarte una invitación a ti mismo' }, { status: 400 });
     }
 
-    // Check if receiver already has a couple
-    const { data: receiverCouple, error: receiverCoupleError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', receiver.id)
-      .maybeSingle();
+    const receiverCouple = await prisma.couple_members.findFirst({
+      where: { user_id: receiver.id },
+      select: { couple_id: true }
+    });
 
     if (receiverCouple) {
       return NextResponse.json({ error: 'Esta persona ya está en una relación' }, { status: 400 });
     }
 
-    // Check if there's already a pending invitation
-    const { data: existingInvitation, error: existingError } = await supabase
-      .from('couple_invitations')
-      .select('id')
-      .eq('sender_user_id', user.id)
-      .eq('receiver_user_id', receiver.id)
-      .eq('status', 'pending')
-      .maybeSingle();
+    const existingInvitation = await prisma.couple_invitations.findFirst({
+      where: {
+        sender_user_id: user.id,
+        receiver_user_id: receiver.id,
+        status: 'pending'
+      },
+      select: { id: true }
+    });
 
     if (existingInvitation) {
       return NextResponse.json({ error: 'Ya existe una invitación pendiente' }, { status: 400 });
     }
 
-    // Create invitation
-    const { data, error } = await supabase
-      .from('couple_invitations')
-      .insert({
+    const data = await prisma.couple_invitations.create({
+      data: {
         sender_user_id: user.id,
         receiver_user_id: receiver.id,
         message: message || null,
         status: 'pending'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+      }
+    });
 
     return NextResponse.json({ data, message: 'Invitación enviada' }, { status: 201 });
   } catch (error) {
@@ -89,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Get invitations received by current user
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -99,19 +87,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from('couple_invitations')
-      .select(`
-        *,
-        sender:sender_user_id(id, display_name)
-      `)
-      .eq('receiver_user_id', user.id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.couple_invitations.findMany({
+      where: {
+        receiver_user_id: user.id,
+        status: 'pending'
+      },
+      include: {
+        sender: {
+          select: { id: true, display_name: true }
+        }
+      },
+      orderBy: { created_at: 'desc' }
+    });
 
     return NextResponse.json({ data });
   } catch (error) {
@@ -119,7 +106,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Accept or reject invitation
+
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -135,76 +122,60 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 });
     }
 
-    // Get invitation
-    const { data: invitation, error: invitationError } = await supabase
-      .from('couple_invitations')
-      .select('*')
-      .eq('id', invitation_id)
-      .eq('receiver_user_id', user.id)
-      .eq('status', 'pending')
-      .single();
+    const invitation = await prisma.couple_invitations.findFirst({
+      where: {
+        id: invitation_id,
+        receiver_user_id: user.id,
+        status: 'pending'
+      }
+    });
 
-    if (invitationError || !invitation) {
+    if (!invitation) {
       return NextResponse.json({ error: 'Invitación no encontrada' }, { status: 404 });
     }
 
     if (action === 'reject') {
-      // Just update status to rejected
-      const { error: updateError } = await supabase
-        .from('couple_invitations')
-        .update({
+      await prisma.couple_invitations.update({
+        where: { id: invitation_id },
+        data: {
           status: 'rejected',
-          responded_at: new Date().toISOString()
-        })
-        .eq('id', invitation_id);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
+          responded_at: new Date()
+        }
+      });
 
       return NextResponse.json({ message: 'Invitación rechazada' });
     }
 
-    // Accept invitation - create couple and couple_members
-    const { data: newCouple, error: coupleError } = await supabase
-      .from('couples')
-      .insert({
-        relationship_start_date: new Date().toISOString().split('T')[0]
-      })
-      .select()
-      .single();
+    const newCouple = await prisma.couples.create({
+      data: {
+        relationship_start_date: new Date()
+      }
+    });
 
-    if (coupleError || !newCouple) {
+    if (!newCouple) {
       return NextResponse.json({ error: 'Error al crear la pareja' }, { status: 500 });
     }
 
-    // Add both users to couple_members
-    const { error: membersError } = await supabase
-      .from('couple_members')
-      .insert([
-        { couple_id: newCouple.id, user_id: invitation.sender_user_id },
-        { couple_id: newCouple.id, user_id: invitation.receiver_user_id }
-      ]);
-
-    if (membersError) {
-      // Rollback - delete couple if members creation failed
-      await supabase.from('couples').delete().eq('id', newCouple.id);
+    try {
+      await prisma.couple_members.createMany({
+        data: [
+          { couple_id: newCouple.id, user_id: invitation.sender_user_id },
+          { couple_id: newCouple.id, user_id: invitation.receiver_user_id }
+        ]
+      });
+    } catch (membersError) {
+      await prisma.couples.delete({ where: { id: newCouple.id } });
       return NextResponse.json({ error: 'Error al crear los miembros de la pareja' }, { status: 500 });
     }
 
-    // Update invitation status
-    const { error: updateError } = await supabase
-      .from('couple_invitations')
-      .update({
+    await prisma.couple_invitations.update({
+      where: { id: invitation_id },
+      data: {
         status: 'accepted',
-        responded_at: new Date().toISOString(),
+        responded_at: new Date(),
         couple_id: newCouple.id
-      })
-      .eq('id', invitation_id);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
+      }
+    });
 
     return NextResponse.json({ message: 'Invitación aceptada', couple_id: newCouple.id });
   } catch (error) {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import BottomNavBar from '../molecules/BottomNavBar';
-import { FaDiceFive } from "react-icons/fa";
+import { FaDice, FaCalendar } from "react-icons/fa";
 
 type TodoStatus = 'todo' | 'doing' | 'done';
 
@@ -44,7 +44,6 @@ export default function ToDoListTemplate() {
     date: '',
   });
 
-  // Guardar filtro en localStorage cuando cambie
   useEffect(() => {
     localStorage.setItem('todoFilter', selectedFilter);
   }, [selectedFilter]);
@@ -207,7 +206,6 @@ export default function ToDoListTemplate() {
     <div className="min-h-screen bg-[#f5f5f5] pb-20 pt-12">
       <div className="max-w-screen-xl mx-auto px-6">
         
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
             Panoramas
@@ -218,7 +216,7 @@ export default function ToDoListTemplate() {
               className="w-12 h-12 bg-teal-500 hover:bg-teal-600 rounded-2xl flex items-center justify-center text-white text-2xl transition-all shadow-lg"
               title="Panorama aleatorio"
             >
-              <FaDiceFive />
+              <FaDice />
             </button>
             <button
               onClick={() => setShowAddPopup(true)}
@@ -229,7 +227,6 @@ export default function ToDoListTemplate() {
           </div>
         </div>
 
-        {/* Filter Tabs */}
         <div className="flex gap-3 mb-6">
           {filters.map(filter => (
             <button
@@ -246,7 +243,7 @@ export default function ToDoListTemplate() {
           ))}
         </div>
 
-        {/* Panoramas List */}
+
         <div className="space-y-4">
           {filteredTodos.length === 0 ? (
             <div className="bg-white rounded-3xl shadow-sm p-8 text-center">
@@ -269,12 +266,17 @@ export default function ToDoListTemplate() {
                     {todo.description}
                   </p>
                   {todo.target_date && (
-                    <p className="text-xs text-gray-500">
-                      📅 {new Date(todo.target_date + 'T00:00:00').toLocaleDateString('es-ES', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <FaCalendar className="w-3 h-3" />
+                      {(() => {
+                        const [year, month, day] = todo.target_date.split('-').map(Number);
+                        const date = new Date(year, month - 1, day);
+                        return date.toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        });
+                      })()}
                     </p>
                   )}
                 </div>
@@ -323,7 +325,6 @@ export default function ToDoListTemplate() {
         </div>
       </div>
 
-      {/* Status Selection Popup */}
       {showStatusPopup && selectedTodoId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
@@ -397,7 +398,6 @@ export default function ToDoListTemplate() {
         </div>
       )}
 
-      {/* Add Panorama Popup */}
       {showAddPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
@@ -476,7 +476,7 @@ export default function ToDoListTemplate() {
         </div>
       )}
 
-      {/* Delete Confirmation Popup */}
+
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
@@ -529,7 +529,7 @@ export default function ToDoListTemplate() {
         </div>
       )}
 
-      {/* Empty Alert Popup */}
+
       {showEmptyAlert && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-sm w-full p-6">
@@ -557,12 +557,11 @@ export default function ToDoListTemplate() {
         </div>
       )}
 
-      {/* Random Todo Popup */}
       {showRandomPopup && randomTodo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">
-              🎲 Panorama Aleatorio
+            <h3 className="text-xl font-bold text-gray-900 mb-4 text-center flex items-center justify-center gap-2">
+              <FaDice /> Panorama Aleatorio
             </h3>
             
             {isLoading && (
@@ -580,12 +579,17 @@ export default function ToDoListTemplate() {
                 {randomTodo.description}
               </p>
               {randomTodo.target_date && (
-                <p className="text-xs text-gray-500">
-                  📅 {new Date(randomTodo.target_date + 'T00:00:00').toLocaleDateString('es-ES', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <FaCalendar className="w-3 h-3" />
+                  {(() => {
+                    const [year, month, day] = randomTodo.target_date.split('-').map(Number);
+                    const date = new Date(year, month - 1, day);
+                    return date.toLocaleDateString('es-ES', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    });
+                  })()}
                 </p>
               )}
             </div>

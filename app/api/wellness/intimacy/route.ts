@@ -1,4 +1,5 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -16,31 +17,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('intimacy_events')
-      .insert({
+    const data = await prisma.intimacy_events.create({
+      data: {
         couple_id: coupleMember.couple_id,
         created_by_user_id: user.id,
-        event_date,
+        event_date: new Date(event_date),
         used_condom,
         notes,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+      }
+    });
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
@@ -57,25 +51,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('intimacy_events')
-      .select('*')
-      .eq('couple_id', coupleMember.couple_id)
-      .order('event_date', { ascending: false });
+    const events = await prisma.intimacy_events.findMany({
+      where: { couple_id: coupleMember.couple_id },
+      orderBy: { event_date: 'desc' }
+    });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    // Convertir fechas a ISO string
+    const data = events.map(event => ({
+      ...event,
+      event_date: event.event_date.toISOString().split('T')[0],
+      created_at: event.created_at.toISOString()
+    }));
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {

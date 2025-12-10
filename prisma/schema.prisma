@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client-js"
   output   = "../app/generated/prisma"
+  engineType = "library"
 }
 
 datasource db {
@@ -432,17 +433,21 @@ model couple_members {
 }
 
 model couples {
-  id                      String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at              DateTime               @default(now()) @db.Timestamptz(6)
-  relationship_start_date DateTime?              @db.Date
-  contraceptive_events    contraceptive_events[]
-  couple_members          couple_members[]
-  cycle_phases            cycle_phases[]
-  discussions             discussions[]
-  important_events        important_events[]
-  improvement_goals       improvement_goals[]
-  intimacy_events         intimacy_events[]
-  todo_items              todo_items[]
+  id                         String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                 DateTime                      @default(now()) @db.Timestamptz(6)
+  relationship_start_date    DateTime?                     @db.Date
+  contraceptive_events       contraceptive_events[]
+  couple_members             couple_members[]
+  couple_invitations         couple_invitations[]
+  cycle_phases               cycle_phases[]
+  discussions                discussions[]
+  important_events           important_events[]
+  improvement_goals          improvement_goals[]
+  intimacy_events            intimacy_events[]
+  piggy_bank_expenses        piggy_bank_expenses[]
+  piggy_bank_loans           piggy_bank_loans[]
+  piggy_bank_loan_payments   piggy_bank_loan_payments[]
+  todo_items                 todo_items[]
 
   @@schema("public")
 }
@@ -529,19 +534,25 @@ model intimacy_events {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model profiles {
-  id                   String                 @id @db.Uuid
-  display_name         String?
-  gender               String?
-  invite_code          String?                @unique
-  created_at           DateTime               @default(now()) @db.Timestamptz(6)
-  contraceptive_events contraceptive_events[]
-  couple_members       couple_members[]
-  cycle_phases         cycle_phases[]
-  discussions          discussions[]
-  improvement_goals    improvement_goals[]
-  intimacy_events      intimacy_events[]
-  users                users                  @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  todo_items           todo_items[]
+  id                         String                        @id @db.Uuid
+  display_name               String?
+  gender                     String?
+  invite_code                String?                       @unique
+  created_at                 DateTime                      @default(now()) @db.Timestamptz(6)
+  contraceptive_events       contraceptive_events[]
+  couple_members             couple_members[]
+  couple_invitations_sent    couple_invitations[]          @relation("SenderInvitations")
+  couple_invitations_received couple_invitations[]         @relation("ReceiverInvitations")
+  cycle_phases               cycle_phases[]
+  discussions                discussions[]
+  improvement_goals          improvement_goals[]
+  intimacy_events            intimacy_events[]
+  piggy_bank_expenses        piggy_bank_expenses[]
+  piggy_bank_loans_lender    piggy_bank_loans[]            @relation("LenderLoans")
+  piggy_bank_loans_borrower  piggy_bank_loans[]            @relation("BorrowerLoans")
+  piggy_bank_loan_payments   piggy_bank_loan_payments[]
+  users                      users                         @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  todo_items                 todo_items[]
 
   @@schema("public")
 }
@@ -555,6 +566,7 @@ model todo_items {
   target_date        DateTime? @db.Date
   target_time        DateTime? @db.Time(6)
   completed          Boolean   @default(false)
+  status             String    @default("todo")
   created_at         DateTime  @default(now()) @db.Timestamptz(6)
   couples            couples   @relation(fields: [couple_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   profiles           profiles  @relation(fields: [created_by_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -562,6 +574,75 @@ model todo_items {
   @@index([completed], map: "idx_todo_items_completed")
   @@index([couple_id], map: "idx_todo_items_couple")
   @@index([created_by_user_id], map: "idx_todo_items_created_by")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model couple_invitations {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sender_user_id    String    @db.Uuid
+  receiver_user_id  String    @db.Uuid
+  status            String    @default("pending")
+  message           String?
+  couple_id         String?   @db.Uuid
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  responded_at      DateTime? @db.Timestamptz(6)
+  couples           couples?  @relation(fields: [couple_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sender            profiles  @relation("SenderInvitations", fields: [sender_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  receiver          profiles  @relation("ReceiverInvitations", fields: [receiver_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model piggy_bank_expenses {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id    String   @db.Uuid
+  user_id      String   @db.Uuid
+  amount       Decimal  @db.Decimal
+  description  String
+  expense_date DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  couples      couples  @relation(fields: [couple_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profiles     profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model piggy_bank_loans {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id                String                     @db.Uuid
+  lender_user_id           String                     @db.Uuid
+  borrower_user_id         String                     @db.Uuid
+  amount                   Decimal                    @db.Decimal
+  description              String?
+  loan_date                DateTime                   @default(dbgenerated("CURRENT_DATE")) @db.Date
+  settled                  Boolean                    @default(false)
+  settled_at               DateTime?                  @db.Timestamptz(6)
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  couples                  couples                    @relation(fields: [couple_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  lender                   profiles                   @relation("LenderLoans", fields: [lender_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  borrower                 profiles                   @relation("BorrowerLoans", fields: [borrower_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  piggy_bank_loan_payments piggy_bank_loan_payments[]
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model piggy_bank_loan_payments {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  loan_id        String           @db.Uuid
+  couple_id      String           @db.Uuid
+  payer_user_id  String           @db.Uuid
+  amount         Decimal          @db.Decimal
+  payment_date   DateTime         @default(dbgenerated("CURRENT_DATE")) @db.Date
+  notes          String?
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  loan           piggy_bank_loans @relation(fields: [loan_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  couples        couples          @relation(fields: [couple_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payer          profiles         @relation(fields: [payer_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
   @@schema("public")
 }
 

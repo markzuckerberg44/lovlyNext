@@ -137,12 +137,10 @@ export default function CoupleBankTemplate() {
           await loadExpenses();
         }
       } else {
-        // Determinar borrower según loanDirection
+        
         const currentPartner = couplePartners.find(p => p.user_id === currentUserId);
         const otherPartner = couplePartners.find(p => p.user_id !== currentUserId);
         
-        // Si direction es 'right', el usuario actual presta (borrower es el otro)
-        // Si direction es 'left', el otro presta (pero la API siempre usa current como lender, así que invertimos)
         const borrower_user_id = loanDirection === 'right' ? otherPartner?.user_id : currentUserId;
         const lender_user_id = loanDirection === 'right' ? currentUserId : otherPartner?.user_id;
         
@@ -256,12 +254,10 @@ export default function CoupleBankTemplate() {
     <div className="min-h-screen bg-[#f5f5f5] pb-20 pt-12">
       <div className="max-w-screen-xl mx-auto px-6">
         
-        {/* Header */}
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           Piggy Bank
         </h1>
 
-        {/* Monthly Spent Display */}
         <div className="text-center mb-6">
           <p className="text-sm text-gray-600 mb-2">
             Este mes han gastado:
@@ -271,7 +267,6 @@ export default function CoupleBankTemplate() {
           </p>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex gap-4 mb-6">
           <button
             onClick={() => {
@@ -293,9 +288,8 @@ export default function CoupleBankTemplate() {
           </button>
         </div>
 
-        {/* Quote Card */}
         <div className="bg-gray-800 rounded-3xl p-6 mb-6 flex items-center justify-between">
-          <p className="text-white text-base flex-1 pr-4">
+          <p className="text-white opacity-60 text-base flex-1 pr-4">
             El amor no tiene precio, pero el resto de las cosas sí. Organícense aquí.
           </p>
           <div className="relative w-16 h-16 flex-shrink-0">
@@ -309,7 +303,6 @@ export default function CoupleBankTemplate() {
           </div>
         </div>
 
-        {/* History Section */}
         <div className="mb-4">
           <div className="flex items-center gap-4 mb-4">
             <div className="flex-1 h-px bg-gray-300" />
@@ -391,7 +384,6 @@ export default function CoupleBankTemplate() {
         </div>
       </div>
 
-      {/* Add Transaction Popup */}
       {showAddPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
@@ -406,12 +398,11 @@ export default function CoupleBankTemplate() {
                     ¿Quién le prestó a quién?
                   </p>
                   <div className="flex items-center justify-center gap-3">
-                    {/* Partner 1 */}
+                    
                     <div className="flex-1 py-3 px-4 bg-pink-100 rounded-xl text-center font-medium text-pink-700">
                       {couplePartners.find(p => p.user_id === currentUserId)?.display_name || 'Tú'}
                     </div>
                     
-                    {/* Arrow Button */}
                     <button
                       onClick={() => setLoanDirection(prev => prev === 'right' ? 'left' : 'right')}
                       className="p-3 bg-gray-100 hover:bg-gray-200 rounded-full transition-all"
@@ -428,7 +419,7 @@ export default function CoupleBankTemplate() {
                       </svg>
                     </button>
                     
-                    {/* Partner 2 */}
+                    
                     <div className="flex-1 py-3 px-4 bg-pink-100 rounded-xl text-center font-medium text-pink-700">
                       {couplePartners.find(p => p.user_id !== currentUserId)?.display_name || 'Pareja'}
                     </div>
@@ -501,7 +492,6 @@ export default function CoupleBankTemplate() {
         </div>
       )}
 
-      {/* Payment Popup */}
       {showPaymentPopup && selectedLoan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">

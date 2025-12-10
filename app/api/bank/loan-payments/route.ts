@@ -1,4 +1,5 @@
 import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -16,80 +17,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'loan_id y amount son requeridos' }, { status: 400 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    // Verificar que el préstamo existe y obtener información
-    const { data: loan, error: loanError } = await supabase
-      .from('piggy_bank_loans')
-      .select('*, lender:lender_user_id(display_name), borrower:borrower_user_id(display_name)')
-      .eq('id', loan_id)
-      .single();
+    const loan = await prisma.piggy_bank_loans.findUnique({
+      where: { id: loan_id },
+      include: {
+        lender: { select: { display_name: true } },
+        borrower: { select: { display_name: true } }
+      }
+    });
 
-    if (loanError || !loan) {
+    if (!loan) {
       return NextResponse.json({ error: 'Préstamo no encontrado' }, { status: 404 });
     }
 
-    // Verificar que el usuario es el deudor
     if (loan.borrower_user_id !== user.id) {
       return NextResponse.json({ error: 'No autorizado para pagar este préstamo' }, { status: 403 });
     }
 
-    // Obtener total pagado hasta ahora
-    const { data: payments, error: paymentsError } = await supabase
-      .from('piggy_bank_loan_payments')
-      .select('amount')
-      .eq('loan_id', loan_id);
+    const payments = await prisma.piggy_bank_loan_payments.findMany({
+      where: { loan_id },
+      select: { amount: true }
+    });
 
-    if (paymentsError) {
-      return NextResponse.json({ error: paymentsError.message }, { status: 500 });
-    }
-
-    const totalPaid = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
     const remaining = Number(loan.amount) - totalPaid;
 
-    // Verificar que no se pague más de lo debido
     if (Number(amount) > remaining) {
       return NextResponse.json({ 
         error: `El monto excede la deuda restante de $${remaining.toLocaleString('es-CL')}` 
       }, { status: 400 });
     }
 
-    // Registrar el pago
-    const { data, error } = await supabase
-      .from('piggy_bank_loan_payments')
-      .insert({
+    const data = await prisma.piggy_bank_loan_payments.create({
+      data: {
         loan_id,
         couple_id: coupleMember.couple_id,
         payer_user_id: user.id,
         amount,
         notes: notes || null,
-        payment_date: new Date().toISOString().split('T')[0]
-      })
-      .select()
-      .single();
+        payment_date: new Date()
+      }
+    });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // Si el pago completa la deuda, actualizar el préstamo
     const newTotalPaid = totalPaid + Number(amount);
     if (newTotalPaid >= Number(loan.amount)) {
-      await supabase
-        .from('piggy_bank_loans')
-        .update({ 
+      await prisma.piggy_bank_loans.update({
+        where: { id: loan_id },
+        data: { 
           settled: true,
-          settled_at: new Date().toISOString()
-        })
-        .eq('id', loan_id);
+          settled_at: new Date()
+        }
+      });
     }
 
     return NextResponse.json({ data, remaining: remaining - Number(amount) }, { status: 201 });
@@ -114,29 +100,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'loan_id es requerido' }, { status: 400 });
     }
 
-    const { data: coupleMember, error: coupleMemberError } = await supabase
-      .from('couple_members')
-      .select('couple_id')
-      .eq('user_id', user.id)
-      .single();
+    const coupleMember = await prisma.couple_members.findFirst({
+      where: { user_id: user.id },
+      select: { couple_id: true }
+    });
 
-    if (coupleMemberError || !coupleMember) {
+    if (!coupleMember) {
       return NextResponse.json({ error: 'No pertenece a ninguna pareja' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
-      .from('piggy_bank_loan_payments')
-      .select(`
-        *,
-        payer:payer_user_id(display_name)
-      `)
-      .eq('loan_id', loanId)
-      .eq('couple_id', coupleMember.couple_id)
-      .order('payment_date', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const data = await prisma.piggy_bank_loan_payments.findMany({
+      where: { 
+        loan_id: loanId,
+        couple_id: coupleMember.couple_id
+      },
+      include: {
+        payer: { select: { display_name: true } }
+      },
+      orderBy: { payment_date: 'desc' }
+    });
 
     return NextResponse.json({ data });
   } catch (error) {

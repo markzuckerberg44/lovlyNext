@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/app/lib/supabase/server';
-import { createServiceClient } from '@/app/lib/supabase/service';
+import { prisma } from '@/app/lib/prisma';
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     const supabase = await createClient();
 
-    // Create auth user
+    // Create auth user (Supabase Auth is still needed for authentication)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -43,7 +43,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if email already exists
     if (authData.user.identities && authData.user.identities.length === 0) {
       return NextResponse.json(
         { error: 'Este email ya está registrado. Por favor inicia sesión.' },
@@ -51,23 +50,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use service client to create profile (bypasses RLS)
+    // Create profile using Prisma ORM
     try {
-      const serviceClient = createServiceClient();
-      const { error: profileError } = await serviceClient
-        .from('profiles')
-        .insert({
+      await prisma.profiles.create({
+        data: {
           id: authData.user.id,
           display_name: displayName,
           gender: gender,
-        });
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // Profile creation failed but user exists, they can try logging in
-      }
+        },
+      });
     } catch (profileErr) {
-      console.error('Service client error:', profileErr);
+      console.error('Prisma profile creation error:', profileErr);
       // Continue anyway, profile can be created later
     }
 

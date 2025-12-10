@@ -66,7 +66,7 @@ export default function BottomNavBar() {
                 onClick={() => router.push(item.path)}
                 className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
                   isActive 
-                    ? 'text-pink-500' 
+                    ? 'text-black' 
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >

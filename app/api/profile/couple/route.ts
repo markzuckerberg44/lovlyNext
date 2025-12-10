@@ -1,58 +1,42 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@/app/lib/supabase/server';
+import { prisma } from '@/app/lib/prisma';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: () => {},
-      },
-    }
-  );
-
+  const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: memberData, error: memberError } = await supabase
-    .from('couple_members')
-    .select('couple_id')
-    .eq('user_id', user.id)
-    .single();
+  const memberData = await prisma.couple_members.findFirst({
+    where: { user_id: user.id },
+    select: { couple_id: true }
+  });
 
-  if (memberError || !memberData) {
+  if (!memberData) {
     return NextResponse.json({ error: 'Not in a couple' }, { status: 404 });
   }
 
-  // Get couple information including relationship start date
-  const { data: coupleData, error: coupleError } = await supabase
-    .from('couples')
-    .select('relationship_start_date')
-    .eq('id', memberData.couple_id)
-    .single();
+  const coupleData = await prisma.couples.findUnique({
+    where: { id: memberData.couple_id },
+    select: { relationship_start_date: true }
+  });
 
-  const { data: partners, error: partnersError } = await supabase
-    .from('couple_members')
-    .select(`
-      user_id,
-      profiles!inner(display_name)
-    `)
-    .eq('couple_id', memberData.couple_id);
+  const partners = await prisma.couple_members.findMany({
+    where: { couple_id: memberData.couple_id },
+    include: {
+      profiles: {
+        select: { display_name: true }
+      }
+    }
+  });
 
-  if (partnersError) {
-    return NextResponse.json({ error: 'Failed to fetch partners' }, { status: 500 });
-  }
-
-  const formattedPartners = partners?.map(p => ({
+  const formattedPartners = partners.map(p => ({
     user_id: p.user_id,
-    display_name: (p.profiles as any)?.display_name || null
-  })) || [];
+    display_name: p.profiles?.display_name || null
+  }));
 
   return NextResponse.json({
     currentUserId: user.id,
@@ -62,78 +46,42 @@ export async function GET() {
 }
 
 export async function DELETE() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: () => {},
-      },
-    }
-  );
-
+  const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: memberData, error: memberError } = await supabase
-    .from('couple_members')
-    .select('couple_id')
-    .eq('user_id', user.id)
-    .single();
+  const memberData = await prisma.couple_members.findFirst({
+    where: { user_id: user.id },
+    select: { couple_id: true }
+  });
 
-  if (memberError || !memberData) {
+  if (!memberData) {
     return NextResponse.json({ error: 'Not in a couple' }, { status: 404 });
   }
 
   const coupleId = memberData.couple_id;
 
-  // Delete all related data in correct order (child tables first)
-  // 1. Delete piggy_bank_loan_payments (references piggy_bank_loans)
-  await supabase
-    .from('piggy_bank_loan_payments')
-    .delete()
-    .eq('couple_id', coupleId);
-
-  // 2. Delete all other tables that reference couples(id)
-  await supabase.from('piggy_bank_loans').delete().eq('couple_id', coupleId);
-  await supabase.from('piggy_bank_expenses').delete().eq('couple_id', coupleId);
-  await supabase.from('todo_items').delete().eq('couple_id', coupleId);
-  await supabase.from('intimacy_events').delete().eq('couple_id', coupleId);
-  await supabase.from('contraceptive_events').delete().eq('couple_id', coupleId);
-  await supabase.from('cycle_phases').delete().eq('couple_id', coupleId);
-  await supabase.from('discussions').delete().eq('couple_id', coupleId);
-  await supabase.from('important_events').delete().eq('couple_id', coupleId);
-  await supabase.from('improvement_goals').delete().eq('couple_id', coupleId);
-  
-  // Update couple_invitations to remove couple_id reference (set to null)
-  await supabase
-    .from('couple_invitations')
-    .update({ couple_id: null })
-    .eq('couple_id', coupleId);
-
-  // 3. Delete couple_members
-  const { error: deleteMembersError } = await supabase
-    .from('couple_members')
-    .delete()
-    .eq('couple_id', coupleId);
-
-  if (deleteMembersError) {
-    return NextResponse.json({ error: 'Failed to remove couple members: ' + deleteMembersError.message }, { status: 500 });
-  }
-
-  // 4. Finally delete the couple record
-  const { error: deleteCoupleError } = await supabase
-    .from('couples')
-    .delete()
-    .eq('id', coupleId);
-
-  if (deleteCoupleError) {
-    return NextResponse.json({ error: 'Failed to delete couple: ' + deleteCoupleError.message }, { status: 500 });
-  }
+  await prisma.$transaction([
+    prisma.piggy_bank_loan_payments.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.piggy_bank_loans.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.piggy_bank_expenses.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.todo_items.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.intimacy_events.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.contraceptive_events.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.cycle_phases.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.discussions.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.important_events.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.improvement_goals.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.couple_invitations.updateMany({ 
+      where: { couple_id: coupleId },
+      data: { couple_id: null }
+    }),
+    prisma.couple_members.deleteMany({ where: { couple_id: coupleId } }),
+    prisma.couples.delete({ where: { id: coupleId } })
+  ]);
 
   return NextResponse.json({ message: 'Relationship ended successfully' });
 }
