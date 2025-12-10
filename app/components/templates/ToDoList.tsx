@@ -27,13 +27,27 @@ export default function ToDoListTemplate() {
   const [todoToDelete, setTodoToDelete] = useState<string | null>(null);
   const [randomTodo, setRandomTodo] = useState<TodoItem | null>(null);
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<TodoStatus>('todo');
+  const [selectedFilter, setSelectedFilter] = useState<TodoStatus>(() => {
+    // Cargar filtro guardado al inicializar el estado
+    if (typeof window !== 'undefined') {
+      const savedFilter = localStorage.getItem('todoFilter');
+      if (savedFilter && (savedFilter === 'todo' || savedFilter === 'doing' || savedFilter === 'done')) {
+        return savedFilter as TodoStatus;
+      }
+    }
+    return 'todo';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [newTodo, setNewTodo] = useState({
     name: '',
     description: '',
     date: '',
   });
+
+  // Guardar filtro en localStorage cuando cambie
+  useEffect(() => {
+    localStorage.setItem('todoFilter', selectedFilter);
+  }, [selectedFilter]);
 
   useEffect(() => {
     loadTodos();

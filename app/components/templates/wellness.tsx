@@ -36,6 +36,8 @@ export default function WellnessTemplate() {
   const [showPopup, setShowPopup] = useState(false);
   const [showIntimacyPopup, setShowIntimacyPopup] = useState(false);
   const [showContraceptivePopup, setShowContraceptivePopup] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [phaseToDelete, setPhaseToDelete] = useState<string | null>(null);
   const [usedCondom, setUsedCondom] = useState<boolean | null>(null);
   const [intimacyNote, setIntimacyNote] = useState('');
   const [contraceptiveMethod, setContraceptiveMethod] = useState('');
@@ -44,7 +46,21 @@ export default function WellnessTemplate() {
   const [errorMessage, setErrorMessage] = useState('Por favor selecciona al menos una fecha en el calendario');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'periodo' | 'ovulacion' | 'intimidad' | 'anticonceptivo'>('all');
+  const [filter, setFilter] = useState<'all' | 'periodo' | 'ovulacion' | 'intimidad' | 'anticonceptivo'>(() => {
+    // Cargar filtro guardado al inicializar el estado
+    if (typeof window !== 'undefined') {
+      const savedFilter = localStorage.getItem('wellnessFilter');
+      if (savedFilter && (savedFilter === 'all' || savedFilter === 'periodo' || savedFilter === 'ovulacion' || savedFilter === 'intimidad' || savedFilter === 'anticonceptivo')) {
+        return savedFilter as 'all' | 'periodo' | 'ovulacion' | 'intimidad' | 'anticonceptivo';
+      }
+    }
+    return 'all';
+  });
+
+  // Guardar filtro en localStorage cuando cambie
+  useEffect(() => {
+    localStorage.setItem('wellnessFilter', filter);
+  }, [filter]);
 
   const healthOptions: { type: HealthType; label: string; color: string }[] = [
     { type: 'ovulacion', label: 'Ovulación', color: 'bg-blue-500' },
@@ -178,6 +194,31 @@ export default function WellnessTemplate() {
         }),
       });
       await loadHealthData();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeletePhase = async () => {
+    if (!phaseToDelete || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/wellness/cycle-phases?id=${phaseToDelete}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        await loadHealthData();
+        setShowDeleteConfirm(false);
+        setPhaseToDelete(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Error al eliminar el periodo');
+      }
+    } catch (error) {
+      alert('Error al eliminar el periodo');
     } finally {
       setIsLoading(false);
     }
@@ -351,9 +392,12 @@ export default function WellnessTemplate() {
     new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
   );
 
-  const filteredPhases = filter === 'all' || filter === 'periodo' || filter === 'ovulacion'
-    ? sortedPhases.filter(phase => filter === 'all' || phase.phase_type === filter)
-    : [];
+  const filteredPhases = (() => {
+    if (filter === 'all') return sortedPhases;
+    if (filter === 'periodo') return sortedPhases.filter(phase => phase.phase_type === 'period');
+    if (filter === 'ovulacion') return sortedPhases.filter(phase => phase.phase_type === 'ovulation');
+    return [];
+  })();
   
   const filteredIntimacy = filter === 'all' || filter === 'intimidad' ? intimacyEvents : [];
   const filteredContraceptive = filter === 'all' || filter === 'anticonceptivo' ? contraceptiveEvents : [];
@@ -575,19 +619,37 @@ export default function WellnessTemplate() {
                         </p>
                       )}
                     </div>
-                    {!phase.end_date && (
-                      <button
-                        onClick={() => handleEndPhase(phase.id)}
-                        disabled={isLoading}
-                        className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
-                          isLoading 
-                            ? 'bg-pink-300 cursor-not-allowed' 
-                            : 'bg-pink-500 hover:bg-pink-600'
-                        }`}
-                      >
-                        {isLoading ? 'Finalizando...' : 'Finalizar'}
-                      </button>
-                    )}
+                    <div className="flex gap-2">
+                      {!phase.end_date && (
+                        <button
+                          onClick={() => handleEndPhase(phase.id)}
+                          disabled={isLoading}
+                          className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
+                            isLoading 
+                              ? 'bg-pink-300 cursor-not-allowed' 
+                              : 'bg-pink-500 hover:bg-pink-600'
+                          }`}
+                        >
+                          {isLoading ? 'Finalizando...' : 'Finalizar'}
+                        </button>
+                      )}
+                      {phase.phase_type === 'period' && (
+                        <button
+                          onClick={() => {
+                            setPhaseToDelete(phase.id);
+                            setShowDeleteConfirm(true);
+                          }}
+                          disabled={isLoading}
+                          className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-all ${
+                            isLoading 
+                              ? 'bg-red-300 cursor-not-allowed' 
+                              : 'bg-red-500 hover:bg-red-600'
+                          }`}
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 
@@ -834,6 +896,59 @@ export default function WellnessTemplate() {
                 }`}
               >
                 {isLoading ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup de confirmación para eliminar periodo */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <svg 
+                  className="w-8 h-8 text-red-500" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
+                  />
+                </svg>
+              </div>
+            </div>
+            
+            <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">
+              ¿Eliminar periodo?
+            </h3>
+            
+            <p className="text-gray-600 text-center mb-6">
+              Esta acción no se puede deshacer. El periodo será eliminado permanentemente.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setPhaseToDelete(null);
+                }}
+                disabled={isLoading}
+                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium text-gray-700 transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeletePhase}
+                disabled={isLoading}
+                className="flex-1 py-3 bg-red-500 hover:bg-red-600 rounded-xl font-medium text-white transition-all disabled:opacity-50"
+              >
+                {isLoading ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
           </div>

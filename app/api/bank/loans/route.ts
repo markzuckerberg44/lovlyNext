@@ -10,20 +10,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { phase_type, start_date } = await request.json();
+    const { amount, description, borrower_user_id, lender_user_id, loan_date } = await request.json();
 
-    if (!phase_type || !start_date) {
+    if (!amount || !borrower_user_id) {
       return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: 'Perfil no encontrado' }, { status: 404 });
     }
 
     const { data: coupleMember, error: coupleMemberError } = await supabase
@@ -37,12 +27,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { data, error } = await supabase
-      .from('cycle_phases')
+      .from('piggy_bank_loans')
       .insert({
-        user_id: user.id,
         couple_id: coupleMember.couple_id,
-        phase_type,
-        start_date,
+        lender_user_id: lender_user_id || user.id,
+        borrower_user_id,
+        amount,
+        description: description || null,
+        loan_date: loan_date || new Date().toISOString().split('T')[0],
+        settled: false,
       })
       .select()
       .single();
@@ -77,10 +70,10 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await supabase
-      .from('cycle_phases')
-      .select('*')
+      .from('piggy_bank_loans')
+      .select('*, lender:lender_user_id(display_name), borrower:borrower_user_id(display_name)')
       .eq('couple_id', coupleMember.couple_id)
-      .order('start_date', { ascending: false });
+      .order('loan_date', { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -101,17 +94,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { id, end_date } = await request.json();
+    const { id, settled } = await request.json();
 
-    if (!id || !end_date) {
-      return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'ID es requerido' }, { status: 400 });
+    }
+
+    const updateData: any = { settled };
+    if (settled) {
+      updateData.settled_at = new Date().toISOString();
     }
 
     const { data, error } = await supabase
-      .from('cycle_phases')
-      .update({ end_date })
+      .from('piggy_bank_loans')
+      .update(updateData)
       .eq('id', id)
-      .eq('user_id', user.id)
       .select()
       .single();
 
@@ -120,52 +117,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ data }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id) {
-      return NextResponse.json({ error: 'Falta el ID del periodo' }, { status: 400 });
-    }
-
-    // Verificar que el periodo pertenece al usuario
-    const { data: cyclePhase, error: fetchError } = await supabase
-      .from('cycle_phases')
-      .select('user_id')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !cyclePhase) {
-      return NextResponse.json({ error: 'Periodo no encontrado' }, { status: 404 });
-    }
-
-    if (cyclePhase.user_id !== user.id) {
-      return NextResponse.json({ error: 'No tienes permiso para eliminar este periodo' }, { status: 403 });
-    }
-
-    const { error } = await supabase
-      .from('cycle_phases')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ message: 'Periodo eliminado correctamente' }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
