@@ -1,3 +1,35 @@
+## Informacion grupo
+Grupo 8 <br>
+Julian Honores / 21.328.088-0 <br>
+Mauricio Muñoz / 21.542.213-5 <br>
+Ien Zavala / 21.216.002-4 <br>
+Carlos Tapia / 21.485.544-8
+
+# Lovly - Gestión Integral de Relaciones de Pareja
+
+Lovly es una aplicación moderna diseñada para ayudar a las parejas a gestionar y fortalecer su relación mediante el seguimiento de aspectos fundamentales que a menudo se pasan por alto. La app permite monitorear el ciclo menstrual, registrar momentos de intimidad y uso de anticonceptivos, crear y organizar panoramas (actividades en pareja), elegir planes al azar cuando no saben qué hacer, y gestionar listas de tareas compartidas. Además, incluye una sección de finanzas para llevar un control claro de gastos y préstamos entre la pareja. Lovly convierte datos duros en información valiosa, ayudando a las parejas a mantener la transparencia, organización y comunicación que son esenciales para una relación saludable y duradera.
+
+## Características Principales
+
+- **Salud y Bienestar**: Monitoreo de ciclos menstruales, registro de intimidad y seguimiento de anticonceptivos
+- **Panoramas**: Crea, organiza y elige actividades en pareja al azar
+- **Listas de Tareas**: Gestiona pendientes compartidos con estados (To do, Haciendo, Hecho)
+- **Finanzas**: Control de gastos y préstamos para mantener las cuentas claras
+- **Dashboard**: Visualización de datos y estadísticas mediante gráficos interactivos
+- **Gestión de Pareja**: Sistema de invitaciones y códigos únicos para conectar con tu pareja
+
+## Tecnologías Utilizadas
+
+- **Frontend**: Next.js 16 (App Router), React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Base de Datos**: PostgreSQL (Supabase) con Prisma ORM
+- **Autenticación**: Supabase Auth
+- **Gráficos**: Chart.js (react-chartjs-2)
+- **Iconos**: React Icons
+- **Estado Global**: Redux Toolkit (para filtros y preferencias locales)
+
+## Config Next.js
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
