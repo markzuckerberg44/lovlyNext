@@ -28,6 +28,18 @@ Lovly es una aplicación moderna diseñada para ayudar a las parejas a gestionar
 - **Iconos**: React Icons
 - **Estado Global**: Redux Toolkit (para filtros y preferencias locales)
 
+### Dependencias principales
+Si bien estas son las dependencias principales, utilizamos supabase para almacenar la base de datos en la nube y no dejaremos nuestras variables de entorno publicas, asi que les recomendamos probar la aplicacion hosteada en Vercel mediante el siguiente link: https://lovly-next.vercel.app/
+```bash
+npm install next@16.0.8 react@19.2.1 react-dom@19.2.1
+npm install @prisma/client@^7.1.0 @prisma/adapter-pg@^7.1.0 pg@^8.16.3
+npm install @supabase/ssr@^0.8.0 @supabase/supabase-js@^2.87.0
+npm install @reduxjs/toolkit@^2.11.1 react-redux@^9.2.0
+npm install chart.js@^4.5.1 react-chartjs-2@^5.3.1 chartjs-adapter-date-fns@^3.0.0 date-fns@^4.1.0
+npm install react-icons@^5.5.0
+npm install @neondatabase/serverless@^1.0.2 @prisma/adapter-neon@^7.1.0
+```
+
 ## Config Next.js
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
